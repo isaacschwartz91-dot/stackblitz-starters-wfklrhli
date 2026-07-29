@@ -810,9 +810,17 @@ function setLines(
   if (!incoming) return json(400, { error: 'Expected a list of lines.' });
 
   const baseRevision = asInt(body['baseRevision']);
-  // Section 5: last write wins, but tell the caller it happened.
+  // Section 5: last write wins, but warn on conflict.
+  //
+  // A stale revision alone is not a conflict — one person tapping faster than
+  // the round trip produces those constantly, and a warning that cries wolf
+  // is worse than none. It is only a conflict when someone *else* wrote last,
+  // which is the case section 5 actually describes.
   const conflict =
-    baseRevision !== null && baseRevision < order.revision
+    baseRevision !== null &&
+    baseRevision < order.revision &&
+    order.lastWriterId !== '' &&
+    order.lastWriterId !== me.account.id
       ? 'This order was changed on another device. Your version has been saved over it.'
       : null;
 

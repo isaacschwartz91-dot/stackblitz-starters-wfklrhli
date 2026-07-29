@@ -1,1 +1,244 @@
-/* Add application styles & imports to this file! */
+/**
+ * SCN Food Order Builder — design system.
+ *
+ * A counter instrument that produces an auditable record, not a consumer
+ * shopping app. Serif for the wordmark and the printed record; system sans
+ * for the interface; monospace with tabular figures for every serving count
+ * and dollar figure, because columns of numbers are read by comparison.
+ *
+ * NFR-10: touch targets are never below 44px.
+ * NFR-14: state is always carried by text, never by colour alone.
+ */
+
+:root {
+  --paper: #f7f8f5;
+  --surface: #ffffff;
+  --surface-2: #eef1ec;
+  --ink: #14201c;
+  --ink-2: #46534d;
+  --ink-3: #6b7671;
+  --line: #d8ded8;
+  --line-2: #c3ccc4;
+  --spruce: #1f5c48;
+  --spruce-ink: #ffffff;
+  --spruce-soft: #e3ede8;
+  --ochre: #8a5510;
+  --ochre-soft: #f7ecd9;
+  --clay: #9c2f21;
+  --clay-soft: #f9e3e0;
+
+  --sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --serif: Georgia, 'Iowan Old Style', 'Times New Roman', serif;
+  --mono: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
+
+  --r: 4px;
+  --tap: 44px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #101614;
+    --surface: #18211e;
+    --surface-2: #202b27;
+    --ink: #e8eeea;
+    --ink-2: #a8b4ae;
+    --ink-3: #7d8a84;
+    --line: #2b3733;
+    --line-2: #3a4844;
+    --spruce: #59ad90;
+    --spruce-ink: #0d1412;
+    --spruce-soft: #1a2f28;
+    --ochre: #d99b4a;
+    --ochre-soft: #33270f;
+    --clay: #e08578;
+    --clay-soft: #351915;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html, body { margin: 0; padding: 0; }
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-text-size-adjust: 100%;
+}
+
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+
+/* NFR-14: focus must always be visible. */
+:focus-visible {
+  outline: 2px solid var(--spruce);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px;
+  padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* Keyboard users must be able to jump past the catalog to the rail. */
+.skip-link {
+  position: absolute; left: -9999px; top: 0; z-index: 100;
+  background: var(--spruce); color: var(--spruce-ink);
+  padding: 10px 16px; border-radius: 0 0 var(--r) 0;
+}
+.skip-link:focus { left: 0; }
+
+/* --- buttons ------------------------------------------------------------ */
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  border: 1px solid var(--spruce); background: var(--spruce); color: var(--spruce-ink);
+  border-radius: var(--r); padding: 0 16px; min-height: var(--tap);
+  font-size: 14px; font-weight: 600; white-space: nowrap;
+  text-decoration: none;
+}
+.btn:hover:not(:disabled) { filter: brightness(1.08); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn.ghost { background: transparent; color: var(--spruce); }
+.btn.neutral { background: var(--surface); color: var(--ink); border-color: var(--line-2); }
+.btn.danger { background: var(--clay); border-color: var(--clay); color: #fff; }
+.btn.small { min-height: 36px; padding: 0 12px; font-size: 13px; }
+.btn.wide { width: 100%; }
+
+/* --- form controls ------------------------------------------------------ */
+
+.field { display: flex; flex-direction: column; gap: 5px; }
+.field > label { font-size: 13px; font-weight: 600; }
+.field .hint { font-size: 12px; color: var(--ink-3); }
+
+.input, select.input, textarea.input {
+  min-height: var(--tap);
+  border: 1px solid var(--line-2); border-radius: var(--r);
+  background: var(--surface); color: var(--ink);
+  padding: 8px 12px; font-size: 15px; width: 100%;
+}
+textarea.input { min-height: 84px; resize: vertical; }
+
+/* --- surfaces ----------------------------------------------------------- */
+
+.card {
+  border: 1px solid var(--line); border-radius: var(--r);
+  background: var(--surface); padding: 14px;
+}
+
+.note {
+  border: 1px solid var(--line); border-left: 3px solid var(--spruce);
+  background: var(--surface); border-radius: var(--r);
+  padding: 12px 14px; font-size: 13.5px;
+}
+.note.warn { border-left-color: var(--ochre); }
+.note.bad { border-left-color: var(--clay); }
+.note h4 { margin: 0 0 5px; font-size: 13px; }
+.note p, .note ul { margin: 4px 0 0; }
+.note ul { padding-left: 18px; }
+
+/* --- status chips: text, never colour alone (NFR-14) -------------------- */
+
+.chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11.5px; font-weight: 700;
+  padding: 2px 8px; border-radius: 2px;
+  text-transform: uppercase; letter-spacing: .05em;
+}
+.chip::before { content: ''; width: 6px; height: 6px; border-radius: 1px; background: currentColor; }
+.chip.ok { background: var(--spruce-soft); color: var(--spruce); }
+.chip.short { background: var(--ochre-soft); color: var(--ochre); }
+.chip.over { background: var(--clay-soft); color: var(--clay); }
+.chip.muted { background: var(--surface-2); color: var(--ink-3); }
+
+/* --- meters ------------------------------------------------------------- */
+
+.track {
+  height: 8px; background: var(--surface-2); border: 1px solid var(--line);
+  border-radius: 999px; overflow: hidden; margin: 7px 0 6px;
+}
+.fill { height: 100%; background: var(--spruce); transition: width .18s ease; }
+.fill.short { background: var(--ochre); }
+.fill.over { background: var(--clay); }
+
+/* --- tables ------------------------------------------------------------- */
+
+.scroll-x { overflow-x: auto; }
+
+table.data { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+table.data th {
+  text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .07em;
+  color: var(--ink-3); font-weight: 700;
+  padding: 7px 8px; border-bottom: 1px solid var(--line-2);
+  white-space: nowrap;
+}
+table.data td { padding: 9px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+table.data .r { text-align: right; }
+
+/* --- typography --------------------------------------------------------- */
+
+h1.page { font-family: var(--serif); font-size: 22px; margin: 0 0 3px; text-wrap: balance; }
+h2.sec { font-family: var(--serif); font-size: 17px; font-weight: 600; margin: 0 0 3px; text-wrap: balance; }
+.sec-note { color: var(--ink-3); font-size: 12.5px; margin: 0 0 14px; max-width: 62ch; }
+.label-sm {
+  font-size: 10.5px; text-transform: uppercase; letter-spacing: .08em;
+  color: var(--ink-3); font-weight: 700;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+}
+
+/* --- print (FR-32, NFR-15) ---------------------------------------------- */
+/*
+ * Two sheets come off this app: a customer sheet in large plain type, and a
+ * compliance sheet for reimbursement. Everything interactive is hidden, and
+ * page breaks are controlled so a day's meals are never split in half.
+ */
+
+@media print {
+  :root {
+    --paper: #fff; --surface: #fff; --surface-2: #fff;
+    --ink: #000; --ink-2: #222; --ink-3: #444;
+    --line: #999; --line-2: #666;
+    --spruce: #000; --ochre: #000; --clay: #000;
+    --spruce-soft: #fff; --ochre-soft: #fff; --clay-soft: #fff;
+  }
+
+  body { background: #fff; color: #000; font-size: 11pt; }
+
+  .no-print, .topbar, .tabs, .rail, .btn { display: none !important; }
+  .print-only { display: block !important; }
+
+  .sheet { border: 0 !important; padding: 0 !important; max-width: none !important; }
+  .sheet + .sheet { page-break-before: always; }
+
+  table.data { font-size: 10pt; }
+  table.data th { border-bottom: 1.5pt solid #000; }
+  table.data tr { page-break-inside: avoid; }
+
+  /* Keep a day's three meals together rather than split across a page. */
+  .day { page-break-inside: avoid; border: 1pt solid #000 !important; }
+
+  /* A chip printed in grey is unreadable; give it an outline instead. */
+  .chip { border: 1pt solid #000; }
+
+  a[href]::after { content: ''; }
+
+  @page { margin: 14mm; }
+}
+
+.print-only { display: none; }
+
+/* A narrow roll printer: keep everything in one column. */
+@media print and (max-width: 80mm) {
+  body { font-size: 9pt; }
+  .meals { grid-template-columns: 1fr !important; }
+  .sheet-meta { grid-template-columns: 1fr !important; }
+}

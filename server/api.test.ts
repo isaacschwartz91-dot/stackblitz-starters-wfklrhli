@@ -918,3 +918,58 @@ describe('acceptance criterion 1, through the API', () => {
     assert.equal(snapshot.requiredUnitsByCategory.starch, servingsToUnits(84));
   });
 });
+
+describe('section 5: concurrent edits warn only on a real conflict', () => {
+  let h: Harness;
+  let customer: { accountId: string; token: string };
+  let orderId: string;
+  let itemA: string;
+  let itemB: string;
+
+  before(async () => {
+    h = await makeHarness();
+    const adminToken = await signIn(h, ADMIN_EMAIL, ADMIN_PASSWORD);
+    customer = await createCustomer(h, adminToken, 'c-conflict@example.test');
+    const start = await req(h, 'POST', '/api/orders', { token: customer.token });
+    orderId = bodyOf(start)['order'].id;
+    const items = repo.listItems(h.ctx.db, true);
+    itemA = items[0]!.id;
+    itemB = items[1]!.id;
+  });
+
+  test('one person tapping faster than the round trip is not a conflict', async () => {
+    // Both writes carry the same stale base revision, as a fast double tap does.
+    const first = await req(h, 'PUT', `/api/orders/${orderId}/lines`, {
+      token: customer.token,
+      body: { lines: [{ itemId: itemA, qty: 1 }], baseRevision: 1 },
+    });
+    assert.equal(first.status, 200);
+
+    const second = await req(h, 'PUT', `/api/orders/${orderId}/lines`, {
+      token: customer.token,
+      body: { lines: [{ itemId: itemA, qty: 2 }], baseRevision: 1 },
+    });
+    assert.equal(second.status, 200);
+    assert.equal(bodyOf(second)['conflict'], null, 'the same writer must not be warned');
+    assert.equal(bodyOf(second)['order'].lines[0].qty, 2, 'last write still wins');
+  });
+
+  test('a second person editing the same draft does warn', async () => {
+    const adminToken = await signIn(h, ADMIN_EMAIL, ADMIN_PASSWORD);
+    await req(h, 'POST', '/api/staff/accounts', {
+      token: adminToken,
+      body: { role: 'staff', email: 'two@store.test', password: 'staff-password-2', displayName: 'Pat' },
+    });
+    const staffToken = await signIn(h, 'two@store.test', 'staff-password-2');
+
+    const stale = repo.findOrder(h.ctx.db, orderId)!.revision - 1;
+    const response = await req(h, 'PUT', `/api/orders/${orderId}/lines`, {
+      token: staffToken,
+      body: { lines: [{ itemId: itemB, qty: 5 }], baseRevision: stale },
+    });
+    assert.equal(response.status, 200);
+    assert.ok(bodyOf(response)['conflict'], 'a different writer must be warned');
+    // Section 5: last write still wins.
+    assert.equal(bodyOf(response)['order'].lines[0].itemId, itemB);
+  });
+});

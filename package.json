@@ -9,7 +9,8 @@
     "test:watch": "node --import ./tools/ts-resolver.mjs --test --watch src/shared/**/*.test.ts server/**/*.test.ts",
     "typecheck": "tsc -p tsconfig.app.json --noEmit",
     "serve:api": "node --import ./tools/ts-resolver.mjs server/index.ts",
-    "build:client": "ng build"
+    "build:client": "ng build",
+    "test:e2e": "node tools/smoke.mjs"
   },
   "dependencies": {
     "@angular/common": "^21.1.0",

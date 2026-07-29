@@ -1,10 +1,10 @@
 /**
- * Translations (NFR-10).
+ * Translations (NFR-13, AC-8).
  *
- * Every string a customer can see is keyed here in English and Spanish.
- * The dictionary is typed off the English keys, so a missing Spanish string
- * is a compile error rather than an English word leaking onto a customer
- * screen at the counter.
+ * Every string a customer can see is keyed here in English and Spanish. The
+ * Spanish dictionary is typed as Record<TranslationKey, string>, so a missing
+ * translation is a compile error rather than an English word appearing on a
+ * customer's screen at the counter.
  */
 
 import { Injectable, computed, signal } from '@angular/core';
@@ -13,143 +13,213 @@ import type { Language } from '../../shared/types';
 const EN = {
   appName: 'SCN Food Order Builder',
 
-  // navigation
+  // --- sign in
+  signIn: 'Sign in',
+  signInHint: 'Use the email or phone number the store has on file.',
+  identifier: 'Email or phone number',
+  password: 'Password',
+  usePassword: 'Use a password',
+  useCode: 'Send me a code instead',
+  sendCode: 'Send code',
+  codeSent: 'If that account exists, a code has been sent.',
+  enterCode: 'Enter the 6-digit code',
+  verifyCode: 'Sign in with code',
+  forgotPassword: 'Forgot your password?',
+  resetSent: 'If that account exists, a reset code has been sent.',
+  newPassword: 'New password',
+  resetPassword: 'Set new password',
+  backToSignIn: 'Back to sign in',
+  signOut: 'Sign out',
+  noAccountHelp: 'Accounts are created by store staff when a referral arrives.',
+  sessionEnded: 'Your session ended. Sign in again to continue.',
+
+  // --- shell
   navOrder: 'Order',
   navPlan: 'Meal plan',
-  navSetup: 'Household',
-  navAdmin: 'Admin',
+  navHistory: 'My orders',
   navRecords: 'Records',
+  navAccounts: 'Customers',
+  navAdmin: 'Admin',
   language: 'Language',
   english: 'English',
   spanish: 'Español',
+  loading: 'Loading…',
+  offline: 'Offline — your work is saved on this device',
+  pendingSync: 'Saved here; will sync when the connection returns',
+  online: 'Online',
+  assisting: 'Assisting',
+  endAssist: 'Stop assisting',
+  suspendedNotice:
+    'This account is suspended. Past orders are still available, but a new order cannot be started.',
 
-  // household setup
-  householdSetup: 'Household setup',
-  referralId: 'Referral / authorization ID',
-  referralIdHelp: 'The ID from the SCN referral. No member names are stored.',
-  approvedMembers: 'Approved members',
-  programProfile: 'Program profile',
+  // --- household
+  referralId: 'Referral ID',
+  members: 'Approved members',
+  days: 'Days covered',
   periodStart: 'Benefit period start',
-  dietaryRestrictions: 'Dietary restrictions and allergies',
-  dietaryHelp: 'Optional. Items that do not meet these are handled per store policy.',
-  startOrder: 'Start order',
-  resumeDraft: 'Resume saved order',
-  requiredForOrder: 'This order requires',
-  perMemberPerDay: 'per member per day',
-  daysCovered: 'days covered',
-  members: 'members',
+  noHousehold: 'This account has no household on file yet. Store staff can add one.',
 
-  // order building
+  // --- order
   buildOrder: 'Build the order',
+  buildOrderHint: 'Add whole packages. The panel updates on every tap.',
+  startOrder: 'Start a new order',
   searchItems: 'Search items',
   searchPlaceholder: 'Search by name, SKU, or UPC',
-  allCategories: 'All categories',
-  filterByTag: 'Filter by tag',
-  addToOrder: 'Add',
+  allCategories: 'All',
+  add: 'Add',
   remove: 'Remove',
-  quantity: 'Quantity',
-  packages: 'packages',
-  inYourOrder: 'In your order',
-  emptyOrder: 'No items yet. Add food from the catalog to get started.',
+  inThisOrder: 'In this order',
+  emptyOrder: 'No items yet. Add food from the catalogue to get started.',
+  item: 'Item',
+  qty: 'Qty',
+  servings: 'Servings',
+  price: 'Price',
+  lineTotal: 'Line',
   perPackage: 'per package',
+  useEarly: 'Use early',
+  noServings: 'No servings credited',
   scanBarcode: 'Scan barcode',
-  enterUpc: 'Enter UPC',
+  enterUpc: 'Enter or scan a UPC',
   itemNotFound: 'No item matches that code.',
+  restrictedItem: 'Does not meet',
 
-  // compliance panel
+  // --- compliance
   progress: 'Progress',
-  required: 'Required',
-  inCart: 'In order',
-  short: 'Short',
-  shortBy: 'Short by',
+  requiredServings: 'Required servings',
+  of: 'of',
   met: 'Met',
-  exceeded: 'Over the minimum',
-  overMaximum: 'Over the maximum',
-  needMoreVariety: 'Needs more variety',
-  distinctItems: 'different items',
+  shortBy: 'Short by',
+  overMinimum: 'Over minimum',
+  overMaximum: 'Over maximum',
+  needsVariety: 'Needs more variety',
+  differentItems: 'different items',
   orderTotal: 'Order total',
   budgetCap: 'Budget cap',
   remaining: 'Remaining',
-  overBudget: 'Over budget by',
-  servings: 'servings',
+  overBudgetBy: 'Over budget by',
   qualifies: 'This order qualifies',
   doesNotQualify: 'This order does not qualify yet',
-  whatCounts: 'What counts toward each category',
+  breakdown: 'What counts toward each category',
   showBreakdown: 'Show breakdown',
   hideBreakdown: 'Hide breakdown',
   contributes: 'contributes',
 
-  // suggestions
-  suggestions: 'Ways to close the gap',
-  suggestionAdd: 'Add',
-  suggestionCloses: 'Closes the gap',
-  suggestionPartial: 'Closes part of the gap',
-  noSuggestions: 'No item in the catalog can close this gap within the remaining budget.',
-  overCapHelp: 'Ways to get back under the cap',
-  reduceItem: 'Reduce',
-  swapItem: 'Swap',
-  swapTo: 'for',
+  // --- suggestions
+  closeGap: 'Ways to close the gap',
+  closesGap: 'closes the gap',
+  closesPartially: 'closes part of the gap',
+  noSuggestions: 'No item in the catalogue can close this gap within the remaining budget.',
+  getUnderCap: 'Ways to get back under the cap',
+  reduce: 'Reduce',
+  swapFor: 'Swap for',
   saves: 'saves',
-  reduceBy: 'Reduce by',
-  stillOver: 'Even after these changes the order is still over by',
-  contractProblem: 'The cheapest possible qualifying order costs more than the cap',
+  stillOverBy: 'Even after these changes the order is still over by',
+  contractProblem: 'The cheapest qualifying order costs more than the cap',
   contractProblemHelp:
     'This is a contract shortfall, not a mistake by staff. The cheapest basket that meets every category costs',
-  whichExceedsBy: 'which exceeds the cap by',
-  categoryUnstockable: 'No active item in the catalog can supply this category',
+  exceedsCapBy: 'which exceeds the cap by',
+  categoryUnstockable: 'No active item in the catalogue can supply this category',
 
-  // finalize
+  // --- finalize
   finalize: 'Finalize order',
-  saveDraft: 'Save draft',
-  draftSaved: 'Draft saved',
-  cannotFinalize: 'Cannot finalize while the order is short or over the cap.',
-  override: 'Staff override',
+  finalizeHint: 'Every category is met and the total is within the cap.',
+  cannotFinalize: 'Cannot finalize while a category is short or the order is over the cap.',
+  askStaff: 'Ask store staff to review this order.',
+  staffOverride: 'Staff override',
   overrideReason: 'Reason for override',
   staffInitials: 'Staff initials',
-  applyOverride: 'Finalize with override',
-  overrideRecorded: 'Override recorded',
+  finalizeWithOverride: 'Finalize with override',
   orderFinalized: 'Order finalized',
+  priceChanged: 'A price changed while this order was open',
+  priceWas: 'captured at',
+  priceNow: 'now',
 
-  // meal plan
+  // --- meal plan
   mealPlan: 'Meal plan',
+  mealPlanHint: 'Every day of the benefit period, drawn only from what was bought.',
   generatePlan: 'Generate meal plan',
   regenerate: 'Try a different plan',
   breakfast: 'Breakfast',
   lunch: 'Lunch',
   supper: 'Supper',
   day: 'Day',
-  planStale: 'The order changed. This plan no longer matches it.',
+  planStale: 'The order changed. This plan no longer matches it — generate a new one.',
   planIncomplete: 'Some meals could not be filled',
   mealShort: 'Not enough food for this meal',
-  unusedItems: 'Food bought but not used in the plan',
-  unusedNonCreditable: 'no servings credited — pantry staple',
-  leftover: 'left over',
-  entirelyUnused: 'not used at all',
+  unusedItems: 'Bought but not used in the plan',
+  pantryStaple: 'credits no servings — pantry staple',
+  leftOver: 'left over',
+  notUsedAtAll: 'not used at all',
   noPlanYet: 'No meal plan yet.',
 
-  // print / records
+  // --- print and records
   print: 'Print',
-  customerSheet: 'Customer sheet',
+  printCustomerSheet: 'Print meal plan',
+  printComplianceSheet: 'Print compliance sheet',
+  customerSheet: 'Meal plan',
   complianceSheet: 'Compliance sheet',
-  records: 'Past orders',
+  myOrders: 'My orders',
+  noOrders: 'No orders yet.',
+  status: 'Status',
+  draft: 'Draft',
+  final: 'Final',
+  finalizedOn: 'Finalized',
+  view: 'View',
+  records: 'Records',
   searchRecords: 'Search past orders',
   dateFrom: 'From',
   dateTo: 'To',
+  search: 'Search',
   exportCsv: 'Export CSV',
-  reprint: 'Reprint',
   noRecords: 'No orders match this search.',
-  finalizedOn: 'Finalized',
-  status: 'Status',
+  required: 'Required',
+  purchased: 'Purchased',
+  result: 'Result',
+  short: 'SHORT',
+  staffInitialsAndDate: 'Staff initials & date',
+  customerSignature: 'Customer signature',
+  overriddenLabel: 'Finalized with override',
 
-  // misc
+  // --- staff and admin
+  customers: 'Customers',
+  addCustomer: 'Add customer',
+  createAccount: 'Create account',
+  email: 'Email',
+  phone: 'Phone',
+  displayName: 'Name',
+  programProfile: 'Program profile',
+  dietaryRestrictions: 'Dietary restrictions',
+  suspend: 'Suspend',
+  reinstate: 'Reinstate',
+  unlock: 'Unlock',
+  assist: 'Assist',
+  temporaryPassword: 'Temporary password',
+  active: 'Active',
+  suspended: 'Suspended',
+  adminRules: 'Program rules',
+  adminCatalog: 'Catalogue',
+  importCsv: 'Import CSV',
+  exportCatalog: 'Export catalogue',
+  validationReport: 'Validation report',
+  rowsCreated: 'to create',
+  rowsUpdated: 'to update',
+  rowsRejected: 'rejected',
+  line: 'Line',
+  reason: 'Reason',
+  applyImport: 'Apply import',
+  auditLog: 'Audit log',
+  when: 'When',
+  who: 'Who',
+  action: 'Action',
+
+  // --- misc
   cancel: 'Cancel',
   save: 'Save',
   close: 'Close',
-  confirm: 'Confirm',
-  offline: 'Offline — your work is saved on this device',
-  online: 'Online',
+  back: 'Back',
   yes: 'Yes',
   no: 'No',
+  skipToPanel: 'Skip to the compliance panel',
 } as const;
 
 export type TranslationKey = keyof typeof EN;
@@ -157,164 +227,236 @@ export type TranslationKey = keyof typeof EN;
 const ES: Record<TranslationKey, string> = {
   appName: 'Creador de Pedidos de Alimentos SCN',
 
+  signIn: 'Iniciar sesión',
+  signInHint: 'Use el correo electrónico o el teléfono que la tienda tiene registrado.',
+  identifier: 'Correo electrónico o teléfono',
+  password: 'Contraseña',
+  usePassword: 'Usar una contraseña',
+  useCode: 'Mejor envíenme un código',
+  sendCode: 'Enviar código',
+  codeSent: 'Si esa cuenta existe, se ha enviado un código.',
+  enterCode: 'Ingrese el código de 6 dígitos',
+  verifyCode: 'Iniciar sesión con código',
+  forgotPassword: '¿Olvidó su contraseña?',
+  resetSent: 'Si esa cuenta existe, se ha enviado un código de restablecimiento.',
+  newPassword: 'Nueva contraseña',
+  resetPassword: 'Establecer nueva contraseña',
+  backToSignIn: 'Volver al inicio de sesión',
+  signOut: 'Cerrar sesión',
+  noAccountHelp: 'El personal de la tienda crea las cuentas cuando llega una referencia.',
+  sessionEnded: 'Su sesión terminó. Inicie sesión de nuevo para continuar.',
+
   navOrder: 'Pedido',
   navPlan: 'Plan de comidas',
-  navSetup: 'Hogar',
-  navAdmin: 'Administración',
+  navHistory: 'Mis pedidos',
   navRecords: 'Registros',
+  navAccounts: 'Clientes',
+  navAdmin: 'Administración',
   language: 'Idioma',
   english: 'English',
   spanish: 'Español',
+  loading: 'Cargando…',
+  offline: 'Sin conexión — su trabajo está guardado en este dispositivo',
+  pendingSync: 'Guardado aquí; se sincronizará cuando vuelva la conexión',
+  online: 'En línea',
+  assisting: 'Asistiendo a',
+  endAssist: 'Dejar de asistir',
+  suspendedNotice:
+    'Esta cuenta está suspendida. Los pedidos anteriores siguen disponibles, pero no se puede iniciar un pedido nuevo.',
 
-  householdSetup: 'Configuración del hogar',
-  referralId: 'ID de referencia / autorización',
-  referralIdHelp: 'El ID de la referencia del SCN. No se guardan nombres de miembros.',
-  approvedMembers: 'Miembros aprobados',
-  programProfile: 'Perfil del programa',
+  referralId: 'ID de referencia',
+  members: 'Miembros aprobados',
+  days: 'Días cubiertos',
   periodStart: 'Inicio del período de beneficios',
-  dietaryRestrictions: 'Restricciones alimentarias y alergias',
-  dietaryHelp: 'Opcional. Los artículos que no cumplan se manejan según la política de la tienda.',
-  startOrder: 'Comenzar pedido',
-  resumeDraft: 'Reanudar pedido guardado',
-  requiredForOrder: 'Este pedido requiere',
-  perMemberPerDay: 'por miembro por día',
-  daysCovered: 'días cubiertos',
-  members: 'miembros',
+  noHousehold: 'Esta cuenta aún no tiene un hogar registrado. El personal puede agregarlo.',
 
   buildOrder: 'Arme el pedido',
+  buildOrderHint: 'Agregue paquetes enteros. El panel se actualiza con cada toque.',
+  startOrder: 'Comenzar un pedido nuevo',
   searchItems: 'Buscar artículos',
   searchPlaceholder: 'Buscar por nombre, SKU o UPC',
-  allCategories: 'Todas las categorías',
-  filterByTag: 'Filtrar por etiqueta',
-  addToOrder: 'Agregar',
+  allCategories: 'Todas',
+  add: 'Agregar',
   remove: 'Quitar',
-  quantity: 'Cantidad',
-  packages: 'paquetes',
-  inYourOrder: 'En su pedido',
+  inThisOrder: 'En este pedido',
   emptyOrder: 'Aún no hay artículos. Agregue alimentos del catálogo para comenzar.',
+  item: 'Artículo',
+  qty: 'Cant.',
+  servings: 'Porciones',
+  price: 'Precio',
+  lineTotal: 'Línea',
   perPackage: 'por paquete',
+  useEarly: 'Usar pronto',
+  noServings: 'No acredita porciones',
   scanBarcode: 'Escanear código de barras',
-  enterUpc: 'Ingresar UPC',
+  enterUpc: 'Ingrese o escanee un UPC',
   itemNotFound: 'Ningún artículo coincide con ese código.',
+  restrictedItem: 'No cumple con',
 
   progress: 'Progreso',
-  required: 'Requerido',
-  inCart: 'En el pedido',
-  short: 'Falta',
-  shortBy: 'Faltan',
+  requiredServings: 'Porciones requeridas',
+  of: 'de',
   met: 'Cumplido',
-  exceeded: 'Por encima del mínimo',
-  overMaximum: 'Por encima del máximo',
-  needMoreVariety: 'Necesita más variedad',
-  distinctItems: 'artículos diferentes',
+  shortBy: 'Faltan',
+  overMinimum: 'Sobre el mínimo',
+  overMaximum: 'Sobre el máximo',
+  needsVariety: 'Necesita más variedad',
+  differentItems: 'artículos diferentes',
   orderTotal: 'Total del pedido',
   budgetCap: 'Límite de presupuesto',
   remaining: 'Restante',
-  overBudget: 'Excede el presupuesto por',
-  servings: 'porciones',
+  overBudgetBy: 'Excede el presupuesto por',
   qualifies: 'Este pedido califica',
   doesNotQualify: 'Este pedido aún no califica',
-  whatCounts: 'Qué cuenta para cada categoría',
+  breakdown: 'Qué cuenta para cada categoría',
   showBreakdown: 'Mostrar desglose',
   hideBreakdown: 'Ocultar desglose',
   contributes: 'aporta',
 
-  suggestions: 'Maneras de cerrar la brecha',
-  suggestionAdd: 'Agregar',
-  suggestionCloses: 'Cierra la brecha',
-  suggestionPartial: 'Cierra parte de la brecha',
+  closeGap: 'Maneras de cerrar la brecha',
+  closesGap: 'cierra la brecha',
+  closesPartially: 'cierra parte de la brecha',
   noSuggestions:
     'Ningún artículo del catálogo puede cerrar esta brecha dentro del presupuesto restante.',
-  overCapHelp: 'Maneras de volver por debajo del límite',
-  reduceItem: 'Reducir',
-  swapItem: 'Cambiar',
-  swapTo: 'por',
+  getUnderCap: 'Maneras de volver por debajo del límite',
+  reduce: 'Reducir',
+  swapFor: 'Cambiar por',
   saves: 'ahorra',
-  reduceBy: 'Reducir en',
-  stillOver: 'Aun con estos cambios, el pedido sigue excediendo por',
+  stillOverBy: 'Aun con estos cambios, el pedido sigue excediendo por',
   contractProblem: 'El pedido más barato que califica cuesta más que el límite',
   contractProblemHelp:
     'Esto es una limitación del contrato, no un error del personal. La canasta más barata que cumple con todas las categorías cuesta',
-  whichExceedsBy: 'lo cual excede el límite por',
+  exceedsCapBy: 'lo cual excede el límite por',
   categoryUnstockable: 'Ningún artículo activo del catálogo puede cubrir esta categoría',
 
   finalize: 'Finalizar pedido',
-  saveDraft: 'Guardar borrador',
-  draftSaved: 'Borrador guardado',
+  finalizeHint: 'Todas las categorías se cumplen y el total está dentro del límite.',
   cannotFinalize: 'No se puede finalizar mientras falten porciones o se exceda el límite.',
-  override: 'Anulación del personal',
+  askStaff: 'Pida al personal de la tienda que revise este pedido.',
+  staffOverride: 'Anulación del personal',
   overrideReason: 'Motivo de la anulación',
   staffInitials: 'Iniciales del personal',
-  applyOverride: 'Finalizar con anulación',
-  overrideRecorded: 'Anulación registrada',
+  finalizeWithOverride: 'Finalizar con anulación',
   orderFinalized: 'Pedido finalizado',
+  priceChanged: 'Un precio cambió mientras este pedido estaba abierto',
+  priceWas: 'registrado en',
+  priceNow: 'ahora',
 
   mealPlan: 'Plan de comidas',
+  mealPlanHint: 'Cada día del período de beneficios, solo con lo que se compró.',
   generatePlan: 'Generar plan de comidas',
   regenerate: 'Probar otro plan',
   breakfast: 'Desayuno',
   lunch: 'Almuerzo',
   supper: 'Cena',
   day: 'Día',
-  planStale: 'El pedido cambió. Este plan ya no coincide con él.',
+  planStale: 'El pedido cambió. Este plan ya no coincide — genere uno nuevo.',
   planIncomplete: 'Algunas comidas no se pudieron completar',
   mealShort: 'No hay suficiente comida para esta comida',
-  unusedItems: 'Alimentos comprados pero no usados en el plan',
-  unusedNonCreditable: 'no acredita porciones — producto de despensa',
-  leftover: 'sobrante',
-  entirelyUnused: 'no se usó en absoluto',
+  unusedItems: 'Comprado pero no usado en el plan',
+  pantryStaple: 'no acredita porciones — producto de despensa',
+  leftOver: 'sobrante',
+  notUsedAtAll: 'no se usó en absoluto',
   noPlanYet: 'Aún no hay plan de comidas.',
 
   print: 'Imprimir',
-  customerSheet: 'Hoja del cliente',
+  printCustomerSheet: 'Imprimir plan de comidas',
+  printComplianceSheet: 'Imprimir hoja de cumplimiento',
+  customerSheet: 'Plan de comidas',
   complianceSheet: 'Hoja de cumplimiento',
-  records: 'Pedidos anteriores',
+  myOrders: 'Mis pedidos',
+  noOrders: 'Aún no hay pedidos.',
+  status: 'Estado',
+  draft: 'Borrador',
+  final: 'Final',
+  finalizedOn: 'Finalizado',
+  view: 'Ver',
+  records: 'Registros',
   searchRecords: 'Buscar pedidos anteriores',
   dateFrom: 'Desde',
   dateTo: 'Hasta',
+  search: 'Buscar',
   exportCsv: 'Exportar CSV',
-  reprint: 'Reimprimir',
   noRecords: 'Ningún pedido coincide con esta búsqueda.',
-  finalizedOn: 'Finalizado',
-  status: 'Estado',
+  required: 'Requerido',
+  purchased: 'Comprado',
+  result: 'Resultado',
+  short: 'FALTA',
+  staffInitialsAndDate: 'Iniciales del personal y fecha',
+  customerSignature: 'Firma del cliente',
+  overriddenLabel: 'Finalizado con anulación',
+
+  customers: 'Clientes',
+  addCustomer: 'Agregar cliente',
+  createAccount: 'Crear cuenta',
+  email: 'Correo electrónico',
+  phone: 'Teléfono',
+  displayName: 'Nombre',
+  programProfile: 'Perfil del programa',
+  dietaryRestrictions: 'Restricciones alimentarias',
+  suspend: 'Suspender',
+  reinstate: 'Reactivar',
+  unlock: 'Desbloquear',
+  assist: 'Asistir',
+  temporaryPassword: 'Contraseña temporal',
+  active: 'Activa',
+  suspended: 'Suspendida',
+  adminRules: 'Reglas del programa',
+  adminCatalog: 'Catálogo',
+  importCsv: 'Importar CSV',
+  exportCatalog: 'Exportar catálogo',
+  validationReport: 'Informe de validación',
+  rowsCreated: 'a crear',
+  rowsUpdated: 'a actualizar',
+  rowsRejected: 'rechazadas',
+  line: 'Línea',
+  reason: 'Motivo',
+  applyImport: 'Aplicar importación',
+  auditLog: 'Registro de auditoría',
+  when: 'Cuándo',
+  who: 'Quién',
+  action: 'Acción',
 
   cancel: 'Cancelar',
   save: 'Guardar',
   close: 'Cerrar',
-  confirm: 'Confirmar',
-  offline: 'Sin conexión — su trabajo está guardado en este dispositivo',
-  online: 'En línea',
+  back: 'Volver',
   yes: 'Sí',
   no: 'No',
+  skipToPanel: 'Saltar al panel de cumplimiento',
 };
 
-const DICTIONARIES: Record<Language, Record<TranslationKey, string>> = {
-  en: EN,
-  es: ES,
-};
+const DICTIONARIES: Record<Language, Record<TranslationKey, string>> = { en: EN, es: ES };
 
 const STORAGE_KEY = 'scn.language';
 
 @Injectable({ providedIn: 'root' })
 export class I18nService {
   readonly language = signal<Language>(readStoredLanguage());
+  readonly locale = computed(() => (this.language() === 'es' ? 'es-US' : 'en-US'));
 
-  readonly dictionary = computed(() => DICTIONARIES[this.language()]);
+  private readonly dictionary = computed(() => DICTIONARIES[this.language()]);
 
-  /** Translate a key. Falls back to English rather than showing a raw key. */
-  t = (key: TranslationKey): string => this.dictionary()[key] ?? EN[key];
+  /** Falls back to English rather than showing a raw key. */
+  readonly t = computed(() => {
+    const dict = this.dictionary();
+    return (key: TranslationKey): string => dict[key] ?? EN[key];
+  });
 
   setLanguage(language: Language): void {
     this.language.set(language);
     try {
       localStorage.setItem(STORAGE_KEY, language);
     } catch {
-      // Private browsing can refuse localStorage; the app still works.
+      /* private browsing can refuse localStorage; the app still works */
     }
+    if (typeof document !== 'undefined') document.documentElement.lang = language;
   }
 
-  /** Locale tag for Intl formatting of dates. */
-  readonly locale = computed(() => (this.language() === 'es' ? 'es-US' : 'en-US'));
+  /** Category and item names come from the catalogue, not the dictionary. */
+  localized(name: string, nameEs: string): string {
+    return this.language() === 'es' && nameEs ? nameEs : name;
+  }
 }
 
 function readStoredLanguage(): Language {
@@ -323,12 +465,7 @@ function readStoredLanguage(): Language {
     if (stored === 'es' || stored === 'en') return stored;
     if (typeof navigator !== 'undefined' && navigator.language?.startsWith('es')) return 'es';
   } catch {
-    // ignore
+    /* ignore */
   }
   return 'en';
-}
-
-/** Meal labels in the active language. */
-export function mealLabelKey(meal: string): TranslationKey {
-  return meal === 'breakfast' ? 'breakfast' : meal === 'lunch' ? 'lunch' : 'supper';
 }
