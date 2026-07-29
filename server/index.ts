@@ -13,6 +13,21 @@ import { bootstrap } from './bootstrap';
 import { createApiServer } from './http';
 import type { ApiContext } from './api';
 
+/**
+ * Node 22.6+ is required: the server uses node:sqlite and relies on Node
+ * stripping TypeScript types itself. On an older runtime the failure is a
+ * cryptic "Cannot find module 'node:sqlite'", so say it plainly instead.
+ */
+const [major, minor] = process.versions.node.split('.').map(Number);
+if ((major ?? 0) < 22 || ((major ?? 0) === 22 && (minor ?? 0) < 6)) {
+  console.error(
+    `\nThis app needs Node 22.6 or newer. You are running ${process.versions.node}.\n\n` +
+      'Install a newer Node (https://nodejs.org) and try again.\n' +
+      'If you use nvm:  nvm install 22 && nvm use 22\n',
+  );
+  process.exit(1);
+}
+
 const PORT = Number(process.env['PORT'] ?? 4000);
 const DB_PATH = process.env['DB_PATH'] ?? resolve('data/scn.sqlite');
 const STATIC_DIR = process.env['STATIC_DIR'] ?? resolve('dist/demo/browser');

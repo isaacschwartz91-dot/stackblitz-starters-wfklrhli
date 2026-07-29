@@ -11,7 +11,8 @@
     "serve:api": "node --import ./tools/ts-resolver.mjs server/index.ts",
     "build:client": "ng build",
     "test:e2e": "node tools/smoke.mjs",
-    "start:dev": "ng serve"
+    "start:dev": "ng serve",
+    "local": "npm run build:client && npm start"
   },
   "dependencies": {
     "@angular/common": "^21.1.0",
