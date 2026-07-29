@@ -823,11 +823,16 @@ function setLines(
   for (const raw of incoming) {
     const entry = asRecord(raw);
     const itemId = asString(entry['itemId']);
-    const qty = asInt(entry['qty']) ?? 0;
-    if (qty === 0) continue;
-    if (validateQuantity(qty).length > 0) {
-      return json(400, { error: 'Quantities must be whole packages of one or more.' });
+
+    // A quantity that is present but not a whole package is an error, not a
+    // line to skip. Dropping it silently would quietly shrink an order that
+    // becomes a reimbursement claim.
+    const rawQty = entry['qty'];
+    if (typeof rawQty !== 'number' || validateQuantity(rawQty).length > 0) {
+      return json(400, { error: 'Quantities must be whole packages of zero or more.' });
     }
+    const qty = rawQty;
+    if (qty === 0) continue;
 
     const item = repo.findItem(ctx.db, itemId);
     if (!item) return json(400, { error: 'That item is not in the catalog.' });

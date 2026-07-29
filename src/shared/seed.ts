@@ -8,10 +8,10 @@
  * real SCN contract terms (spec section 1, DECIDE #1-#5).
  */
 
-import type { Category, Item, MealSplit, ProgramProfile, ShelfLifeClass } from '../../shared/types';
-import { MEAL_KEYS } from '../../shared/types';
-import { servingsToUnits } from '../../shared/units';
-import { newId } from '../../shared/ids';
+import type { Category, Item, MealSplit, ProgramProfile, ShelfLifeClass } from './types';
+import { MEAL_KEYS } from './types';
+import { servingsToUnits } from './units';
+import { newId } from './ids';
 
 export const SEED_CATEGORIES: Category[] = [
   { id: 'cat-fruit', key: 'fruit', label: 'Fruit', unitLabel: 'cup-eq', sortOrder: 1, active: true },

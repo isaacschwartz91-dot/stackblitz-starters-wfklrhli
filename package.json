@@ -7,7 +7,9 @@
     "build": "ng build",
     "test": "node --import ./tools/ts-resolver.mjs --test src/shared/**/*.test.ts server/**/*.test.ts",
     "test:watch": "node --import ./tools/ts-resolver.mjs --test --watch src/shared/**/*.test.ts server/**/*.test.ts",
-    "typecheck": "tsc -p tsconfig.app.json --noEmit"
+    "typecheck": "tsc -p tsconfig.app.json --noEmit",
+    "serve:api": "node --import ./tools/ts-resolver.mjs server/index.ts",
+    "build:client": "ng build"
   },
   "dependencies": {
     "@angular/common": "^21.1.0",

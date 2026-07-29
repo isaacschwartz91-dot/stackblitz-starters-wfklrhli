@@ -11,7 +11,7 @@ import { Injectable, computed, signal } from '@angular/core';
 import * as idb from './idb';
 import { STORES } from './idb';
 import { deviceId, newId } from '../../shared/ids';
-import { DEFAULT_SHELF_LIFE_HORIZONS, SEED_CATEGORIES, seedItems, seedProfile } from './seed';
+import { DEFAULT_SHELF_LIFE_HORIZONS, SEED_CATEGORIES, seedItems, seedProfile } from '../../shared/seed';
 import type {
   AppSettings,
   AuditAction,
