@@ -197,6 +197,10 @@ export async function handle(ctx: ApiContext, request: ApiRequest): Promise<ApiR
   const { method, path } = request;
 
   try {
+    // Liveness probe for the host's health check. Deliberately reveals
+    // nothing beyond the fact that the process is up.
+    if (path === '/api/health' && method === 'GET') return json(200, { ok: true });
+
     // --- unauthenticated auth endpoints
     if (path === '/api/auth/sign-in' && method === 'POST') return await signIn(ctx, request);
     if (path === '/api/auth/request-code' && method === 'POST') return requestCode(ctx, request, 'sign_in');

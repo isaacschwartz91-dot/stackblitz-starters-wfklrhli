@@ -1,0 +1,26 @@
+# One-click deploy on Render: New > Blueprint, point it at this repo.
+services:
+  - type: web
+    name: scn-food-order-builder
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    # A persistent disk is required. The database is a file; without it every
+    # restart wipes the orders, which for a reimbursement record is fatal.
+    plan: starter
+    disk:
+      name: scn-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: DB_PATH
+        value: /data/scn.sqlite
+      - key: SECURE_COOKIES
+        value: "1"
+      - key: TRUST_PROXY
+        value: "1"
+      # Render prompts for these at deploy time.
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false

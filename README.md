@@ -28,6 +28,55 @@ whenever the app is served over TLS), `TRUST_PROXY=1` (only when a reverse
 proxy sits in front, otherwise clients can spoof their IP past the rate
 limiter).
 
+## Deploying it
+
+The app is a single Node process serving both the API and the built client,
+with SQLite on disk. It needs **a persistent disk** — the database is a file,
+and without one every restart wipes the orders.
+
+A `Dockerfile` and a Render blueprint (`render.yaml`) are included. The
+runtime image carries no `node_modules` at all: the server imports only Node
+built-ins, and Node strips the TypeScript types itself.
+
+### Render (no command line needed)
+
+1. Push this branch to GitHub.
+2. Render dashboard → **New** → **Blueprint** → pick this repository.
+3. Render reads `render.yaml` and prompts for two values:
+   - `ADMIN_EMAIL` — the first admin sign-in
+   - `ADMIN_PASSWORD` — 10+ characters
+4. **Apply**. First build takes a few minutes.
+5. Open the URL Render gives you and sign in with those credentials.
+
+The blueprint asks for the Starter plan because the free plan has no
+persistent disk. On free, the database resets on every restart — fine for a
+look, not for real records.
+
+### Any Docker host
+
+```bash
+docker build -t scn-food-order-builder .
+docker run -d -p 4000:4000 \
+  -v scn-data:/data \
+  -e ADMIN_EMAIL=you@store.example \
+  -e ADMIN_PASSWORD='choose-a-long-one' \
+  -e SECURE_COOKIES=0 \
+  scn-food-order-builder
+```
+
+Set `SECURE_COOKIES=1` once it is behind HTTPS — with it on, the session
+cookie is refused over plain HTTP and sign-in will appear to silently fail.
+Set `TRUST_PROXY=1` only when a reverse proxy sits in front; otherwise clients
+can spoof their IP past the rate limiter.
+
+### What will not work
+
+Netlify, Vercel static, GitHub Pages, and StackBlitz cannot host this. They
+serve static files or short-lived functions; this needs a long-running process
+and a disk that survives restarts. The old `netlify.toml` has been removed
+because it pointed at a static publish directory that would have deployed a
+site with no working API.
+
 ## Tests
 
 ```bash
