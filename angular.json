@@ -42,7 +42,8 @@
               "src/global_styles.css"
             ],
             "tsConfig": "tsconfig.app.json"
-          }
+          },
+          "defaultConfiguration": "production"
         },
         "serve": {
           "builder": "@angular/build:dev-server",

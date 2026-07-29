@@ -6,27 +6,58 @@ customer build a food order that must meet per-member serving minimums across
 configurable food categories, stay under a dollar cap, and produce a
 breakfast/lunch/supper meal plan for the benefit period.
 
-## Running it
+## Running it locally
+
+You need **Node 22.6 or newer** (`node -v` to check). Older versions cannot
+run this — the server uses `node:sqlite` and Node's built-in TypeScript
+support. If you use nvm: `nvm install 22 && nvm use 22`.
 
 ```bash
-npm install
-npm run build:client          # builds the Angular app into dist/demo/browser
-npm run serve:api             # serves the API and the built client on :4000
+git clone https://github.com/isaacschwartz91-dot/stackblitz-starters-wfklrhli.git
+cd stackblitz-starters-wfklrhli
+git checkout claude/scn-food-order-builder-cw9bo8
+
+npm ci
+
+ADMIN_EMAIL=you@example.com ADMIN_PASSWORD=pick-a-long-password npm run local
 ```
 
-On first run the server creates the database, seeds an example program
-profile and starter catalogue, and prints a generated admin password **once**:
+Then open **http://localhost:4000** and sign in with those two values.
+
+`npm run local` builds the client and starts the server. After the first run
+you can skip the rebuild with `npm start` unless you changed the client.
+
+On first start the server creates `data/scn.sqlite`, seeds an example program
+profile and starter catalogue, and creates your admin account. Omit
+`ADMIN_EMAIL`/`ADMIN_PASSWORD` and it generates a password and prints it once:
 
 ```
 [setup] Created the first admin account: admin@store.local
 [setup] Temporary password: <generated>
 ```
 
-Set `ADMIN_EMAIL` and `ADMIN_PASSWORD` to choose your own. Other environment
-variables: `PORT`, `DB_PATH`, `STATIC_DIR`, `SECURE_COOKIES=1` (set this
-whenever the app is served over TLS), `TRUST_PROXY=1` (only when a reverse
-proxy sits in front, otherwise clients can spoof their IP past the rate
-limiter).
+To start over, stop the server and delete `data/scn.sqlite`.
+
+### Environment variables
+
+| Variable | Default | Notes |
+|---|---|---|
+| `PORT` | `4000` | |
+| `DB_PATH` | `data/scn.sqlite` | The database is a single file. Back it up. |
+| `STATIC_DIR` | `dist/demo/browser` | Where the built client lives. |
+| `SECURE_COOKIES` | off | Set to `1` **only** behind HTTPS. On plain HTTP it makes sign-in fail silently. |
+| `TRUST_PROXY` | off | Set to `1` only behind a reverse proxy. |
+| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | — | First run only. |
+
+### First things to try
+
+1. Sign in as admin → **Customers** → **Add customer**. Fill in a referral ID,
+   3 members, and a temporary password.
+2. Sign out, sign in as that customer → **Start a new order**. The panel shows
+   42 / 63 / 63 / 84 servings and a $285 cap.
+3. Take the suggestions until it says "This order qualifies", then finalize and
+   look at the meal plan and compliance sheet.
+4. Switch to **Español** to see the customer screens in Spanish.
 
 ## Deploying it
 
