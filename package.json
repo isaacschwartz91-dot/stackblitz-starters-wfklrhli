@@ -1,10 +1,13 @@
 {
-  "name": "angular-starter",
+  "name": "scn-food-order-builder",
   "private": true,
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
-    "build": "ng build"
+    "build": "ng build",
+    "test": "node --import ./tools/ts-resolver.mjs --test src/shared/**/*.test.ts server/**/*.test.ts",
+    "test:watch": "node --import ./tools/ts-resolver.mjs --test --watch src/shared/**/*.test.ts server/**/*.test.ts",
+    "typecheck": "tsc -p tsconfig.app.json --noEmit"
   },
   "dependencies": {
     "@angular/common": "^21.1.0",
