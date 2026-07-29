@@ -10,6 +10,8 @@ import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/c
 
 import { AppState, type Screen } from './core/state';
 import { I18nService } from './core/i18n';
+import { AdminComponent } from './features/admin';
+import { HistoryComponent } from './features/history';
 import { OrderComponent } from './features/order';
 import { PlanComponent } from './features/plan';
 import { SignInComponent } from './features/sign-in';
@@ -18,7 +20,14 @@ import { formatCents } from '../shared/units';
 
 @Component({
   selector: 'app-root',
-  imports: [SignInComponent, OrderComponent, PlanComponent, StaffComponent],
+  imports: [
+    SignInComponent,
+    OrderComponent,
+    PlanComponent,
+    StaffComponent,
+    AdminComponent,
+    HistoryComponent,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styles: [
     `
@@ -249,8 +258,14 @@ import { formatCents } from '../shared/units';
         @case ('plan') {
           <app-plan />
         }
+        @case ('history') {
+          <app-history />
+        }
         @case ('accounts') {
           <app-staff />
+        }
+        @case ('admin') {
+          <app-admin />
         }
         @default {
           <app-order />
@@ -271,13 +286,20 @@ export class App {
 
   /** Staff see the customer list; customers never do (NFR-5, AC-11). */
   protected readonly visibleTabs = computed(() => {
-    const tabs: { screen: Screen; key: 'navOrder' | 'navPlan' | 'navAccounts' }[] = [];
+    type Key = 'navOrder' | 'navPlan' | 'navHistory' | 'navAccounts' | 'navAdmin';
+    const tabs: { screen: Screen; key: Key }[] = [];
     if (!this.state.isStaff() || this.state.assistMode()) {
       tabs.push({ screen: 'order', key: 'navOrder' });
       tabs.push({ screen: 'plan', key: 'navPlan' });
+      tabs.push({ screen: 'history', key: 'navHistory' });
     }
     if (this.state.isStaff()) {
       tabs.push({ screen: 'accounts', key: 'navAccounts' });
+    }
+    // AC-11: the rules and catalogue editor is admin-only, and the server
+    // refuses it for anyone else regardless of what the UI shows.
+    if (this.state.isAdmin()) {
+      tabs.push({ screen: 'admin', key: 'navAdmin' });
     }
     return tabs;
   });

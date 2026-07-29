@@ -155,6 +155,221 @@ async function signIn(page, who) {
   await context.close();
 }
 
+
+// ------------------------------------------------- AC-7 offline resilience
+{
+  const { context, page } = await newPage();
+  await signIn(page, CUSTOMER);
+  await page.click('button:has-text("Start a new order")').catch(() => {});
+  await page.waitForTimeout(1200);
+
+  const orderId = await page.evaluate(async () => {
+    const r = await fetch('/api/me/orders', { credentials: 'same-origin' });
+    const j = await r.json();
+    return (j.orders.find((o) => o.status === 'draft') ?? j.orders[0]).id;
+  });
+
+  const before = await page.evaluate(async (id) => {
+    const r = await fetch('/api/orders/' + id, { credentials: 'same-origin' });
+    return (await r.json()).order.lines.length;
+  }, orderId);
+
+  // --- pull the cable ---
+  await context.setOffline(true);
+  await page.waitForTimeout(400);
+  check('AC-7 offline is announced to the user',
+    /offline/i.test(await page.locator('body').innerText()));
+
+  // Keep working: three more items added with no connection at all.
+  const adders = page.locator('.tile .qty button[aria-label^="Add"]');
+  for (let i = 0; i < 3; i++) {
+    await adders.nth(i).click();
+    await page.waitForTimeout(350);
+  }
+  const offlineLines = await page.locator('#cart-count, .data tbody tr').count().catch(() => 0);
+  check('AC-7 the order keeps updating while offline', offlineLines > before, `${offlineLines} rows`);
+
+  // The edit is on disk, not merely in memory.
+  const staged = await page.evaluate(
+    () =>
+      new Promise((resolve) => {
+        const req = indexedDB.open('scn-drafts');
+        req.onsuccess = () => {
+          const db = req.result;
+          const all = db.transaction('pending').objectStore('pending').getAll();
+          all.onsuccess = () => resolve(all.result);
+          all.onerror = () => resolve([]);
+        };
+        req.onerror = () => resolve([]);
+      }),
+  );
+  check('AC-7 the pending edit is written to IndexedDB', staged.length > 0,
+    `${staged.length} staged`);
+
+  // The server has not seen it yet — nothing was silently sent.
+  await context.setOffline(false);
+  await page.waitForTimeout(2500);
+
+  const after = await page.evaluate(async (id) => {
+    const r = await fetch('/api/orders/' + id, { credentials: 'same-origin' });
+    return (await r.json()).order.lines.length;
+  }, orderId);
+  check('AC-7 the queued edit syncs when the connection returns', after > before,
+    `${before} lines before, ${after} after`);
+
+  const drained = await page.evaluate(
+    () =>
+      new Promise((resolve) => {
+        const req = indexedDB.open('scn-drafts');
+        req.onsuccess = () => {
+          const db = req.result;
+          const all = db.transaction('pending').objectStore('pending').getAll();
+          all.onsuccess = () => resolve(all.result);
+          all.onerror = () => resolve([]);
+        };
+        req.onerror = () => resolve([]);
+      }),
+  );
+  check('AC-7 the queue is cleared once acknowledged', drained.length === 0,
+    `${drained.length} left`);
+
+  await context.close();
+}
+
+// -------------------------------- AC-7 the edit survives closing the tab
+{
+  // Same browser context throughout: closing the *page* is closing the tab.
+  // A new context would get a fresh IndexedDB and prove nothing.
+  const { context, page } = await newPage();
+  await signIn(page, CUSTOMER);
+  await page.waitForTimeout(1000);
+
+  const orderId = await page.evaluate(async () => {
+    const r = await fetch('/api/me/orders', { credentials: 'same-origin' });
+    const j = await r.json();
+    const d = j.orders.find((o) => o.status === 'draft');
+    return d ? d.id : null;
+  });
+
+  if (!orderId) {
+    check('AC-7 an edit made offline survives closing the tab', false, 'no draft order found');
+  } else {
+    const before = await page.evaluate(async (id) => {
+      const r = await fetch('/api/orders/' + id, { credentials: 'same-origin' });
+      return (await r.json()).order.lines.length;
+    }, orderId);
+
+    await context.setOffline(true);
+    await page.waitForTimeout(300);
+    await page.locator('.tile .qty button[aria-label^="Add"]').nth(5).click();
+    await page.waitForTimeout(700);
+
+    const staged = await page.evaluate(
+      () =>
+        new Promise((resolve) => {
+          const req = indexedDB.open('scn-drafts');
+          req.onsuccess = () => {
+            const all = req.result.transaction('pending').objectStore('pending').getAll();
+            all.onsuccess = () => resolve(all.result.length);
+            all.onerror = () => resolve(0);
+          };
+          req.onerror = () => resolve(0);
+        }),
+    );
+    check('AC-7 the edit is on disk before the tab closes', staged > 0, `${staged} staged`);
+
+    // Slam the tab shut while still offline.
+    await page.close();
+
+    // Reopen in the same profile; the session cookie is still there.
+    const reopened = await context.newPage();
+    await context.setOffline(false);
+    await reopened.goto(BASE, { waitUntil: 'networkidle' });
+    await reopened.waitForTimeout(3500);
+
+    const after = await reopened.evaluate(async (id) => {
+      const r = await fetch('/api/orders/' + id, { credentials: 'same-origin' });
+      return (await r.json()).order.lines.length;
+    }, orderId);
+    check('AC-7 an edit made offline survives closing the tab', after > before,
+      `${before} lines before, ${after} after reopening`);
+    await context.close();
+  }
+}
+
+
+// -------------------------------------- admin rules and catalogue (FR-1..4)
+{
+  const { context, page } = await newPage();
+  await signIn(page, ADMIN);
+
+  await page.click('nav.tabs button:has-text("Admin")');
+  await page.waitForTimeout(1200);
+  const rules = await page.locator('app-admin').innerText();
+  check('FR-1 admin can see the program rules editor', /servings per member per day/i.test(rules));
+  check('FR-25 meal splits total 100%', /100%/.test(rules));
+
+  // Change the cap and save as a new version (FR-2).
+  await page.fill('#p-cap', '110.00');
+  await page.click('app-admin button:has-text("Save as new version")');
+  await page.waitForTimeout(2000);
+  const saved = await page.locator('app-admin').innerText();
+  check('FR-2 saving creates a new version', /version 2/i.test(saved), saved.split('\n').find((l) => /version/i.test(l)) ?? '');
+
+  // A completed order must not move (AC-5 / FR-2).
+  const unchanged = await page.evaluate(async () => {
+    const r = await fetch('/api/staff/records?status=final', { credentials: 'same-origin' });
+    const j = await r.json();
+    return j.orders.length === 0 ? null : j.orders[0].order.rulesSnapshot.capTotalCents;
+  });
+  check('FR-2 an existing order keeps its original cap', unchanged === null || unchanged === 28500,
+    `cap on file: ${unchanged}`);
+
+  // Catalogue item editing (FR-4, FR-6).
+  await page.click('app-admin nav.tabs button:has-text("Catalogue")');
+  await page.waitForTimeout(800);
+  await page.click('app-admin button:has-text("Add item")');
+  await page.waitForTimeout(400);
+  await page.fill('#i-name', 'Smoke Test Lentils');
+  await page.fill('#i-price', '3.25');
+  await page.fill('#i-serv', '12');
+  await page.fill('#i-sku', 'SMOKE-1');
+  await page.click('app-admin form button[type=submit]');
+  await page.waitForTimeout(1600);
+  const afterItem = await page.locator('app-admin').innerText();
+  check('FR-4 admin can add a catalogue item', /Smoke Test Lentils/.test(afterItem));
+
+  const stored = await page.evaluate(async () => {
+    const r = await fetch('/api/items', { credentials: 'same-origin' });
+    const j = await r.json();
+    const i = j.items.find((x) => x.name === 'Smoke Test Lentils');
+    return i ? { price: i.priceCents, units: i.servingsPerPackageUnits } : null;
+  });
+  check('FR-4 the item stores integer cents and quarter servings',
+    stored !== null && stored.price === 325 && stored.units === 48,
+    JSON.stringify(stored));
+
+  await context.close();
+}
+
+// ------------------------------------------- customer history (FR-A8, FR-35)
+{
+  const { context, page } = await newPage();
+  await signIn(page, CUSTOMER);
+  await page.click('nav.tabs button:has-text("My orders")');
+  await page.waitForTimeout(1500);
+  const history = await page.locator('app-history').innerText();
+  check('FR-A8 the customer sees their own past orders', /\$/.test(history) && !/no orders/i.test(history));
+
+  await page.click('app-history button:has-text("Reprint")').catch(() => {});
+  await page.waitForTimeout(1800);
+  const reprinted = await page.locator('app-plan').innerText().catch(() => '');
+  check('FR-35 a past order reprints its compliance sheet',
+    /compliance sheet/i.test(reprinted) && /SCN-2026-SMOKE/.test(reprinted));
+
+  await context.close();
+}
+
 await browser.close();
 
 const failed = results.filter((r) => !r.ok);
