@@ -12,6 +12,8 @@ You need **Node 22.6 or newer** (`node -v` to check). Older versions cannot
 run this — the server uses `node:sqlite` and Node's built-in TypeScript
 support. If you use nvm: `nvm install 22 && nvm use 22`.
 
+**macOS / Linux:**
+
 ```bash
 git clone https://github.com/isaacschwartz91-dot/stackblitz-starters-wfklrhli.git
 cd stackblitz-starters-wfklrhli
@@ -22,7 +24,28 @@ npm ci
 ADMIN_EMAIL=you@example.com ADMIN_PASSWORD=pick-a-long-password npm run local
 ```
 
-Then open **http://localhost:4000** and sign in with those two values.
+**Windows (PowerShell)** — the inline `VAR=value` form above is bash only and
+will fail here, so set the variables on their own lines:
+
+```powershell
+git clone https://github.com/isaacschwartz91-dot/stackblitz-starters-wfklrhli.git
+cd stackblitz-starters-wfklrhli
+git checkout claude/scn-food-order-builder-cw9bo8
+
+npm ci
+
+$env:ADMIN_EMAIL="you@example.com"
+$env:ADMIN_PASSWORD="pick-a-long-password"
+npm run local
+```
+
+Wait for `[server] listening on http://localhost:4000`, then leave that
+terminal open — closing it stops the app.
+
+Now open **http://localhost:4000** in a browser — that is a web address for
+the address bar, not a command to type at a terminal. From PowerShell,
+`start http://localhost:4000` opens it for you. Sign in with the two values
+you set above.
 
 `npm run local` builds the client and starts the server. After the first run
 you can skip the rebuild with `npm start` unless you changed the client.
