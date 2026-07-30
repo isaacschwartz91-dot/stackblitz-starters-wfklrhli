@@ -154,7 +154,7 @@ type Tab = 'accounts' | 'records' | 'catalog';
               </div>
               <div class="field">
                 <label for="na-pw">{{ t()('temporaryPassword') }}</label>
-                <input id="na-pw" class="input" name="password" type="text" minlength="10" [(ngModel)]="form.password" />
+                <input id="na-pw" class="input" name="password" type="password" minlength="10" autocomplete="new-password" [(ngModel)]="form.password" />
                 <span class="hint">10+ characters. The customer can change it after signing in.</span>
               </div>
               <div class="field">

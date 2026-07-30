@@ -514,6 +514,16 @@ describe('section 5: entry validation', () => {
     assert.ok(issues.some((i) => i.field === 'referralId'));
   });
 
+  test('an impossible calendar date is rejected instead of silently normalizing', () => {
+    const issues = validateHouseholdInput({
+      memberCount: 1,
+      referralId: 'REF-1',
+      periodStart: '2026-02-30',
+      profileId: 'profile-1',
+    });
+    assert.ok(issues.some((issue) => issue.field === 'periodStart'));
+  });
+
   test('zero or negative days and caps are rejected', () => {
     const base = {
       name: 'Test',

@@ -109,6 +109,7 @@ export function rowToSession(row: Row): SessionRecord {
     accountId: str(row['account_id']),
     issuedAt: str(row['issued_at']),
     expiresAt: str(row['expires_at']),
+    maxExpiresAt: nullableStr(row['max_expires_at']),
     revokedAt: nullableStr(row['revoked_at']),
     actingAsAccountId: nullableStr(row['acting_as_account_id']),
   };
@@ -525,6 +526,8 @@ export function rowToAuditEvent(row: Row): AuditEvent {
     action: str(row['action']) as AuditEvent['action'],
     detail: json(row['detail_json'], {}),
     at: str(row['at']),
+    previousHash: nullableStr(row['prev_hash']),
+    integrityHash: nullableStr(row['integrity_hash']),
   };
 }
 

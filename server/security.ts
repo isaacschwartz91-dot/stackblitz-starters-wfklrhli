@@ -8,6 +8,7 @@
 
 import {
   createHash,
+  createHmac,
   randomBytes,
   randomInt,
   scrypt as scryptCallback,
@@ -110,7 +111,11 @@ export function generateOtp(): string {
 }
 
 export function hashOtp(code: string): string {
-  return createHash('sha256').update(code).digest('hex');
+  // Six-digit codes have only one million possibilities. A keyed HMAC keeps a
+  // copied database from becoming an offline code-verification oracle. Startup
+  // requires OTP_PEPPER in production; the fallback is development-only.
+  const pepper = process.env['OTP_PEPPER'] ?? 'development-only-otp-pepper';
+  return createHmac('sha256', pepper).update(code).digest('hex');
 }
 
 export function otpMatches(code: string, storedHash: string): boolean {

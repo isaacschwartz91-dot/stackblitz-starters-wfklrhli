@@ -26,8 +26,7 @@ ENV NODE_ENV=production \
     PORT=4000 \
     DB_PATH=/data/scn.sqlite \
     STATIC_DIR=/app/dist/demo/browser \
-    SECURE_COOKIES=1 \
-    TRUST_PROXY=1
+    SECURE_COOKIES=1
 
 USER scn
 VOLUME ["/data"]
