@@ -32,8 +32,31 @@ const PORT = Number(process.env['PORT'] ?? 4000);
 const DB_PATH = process.env['DB_PATH'] ?? resolve('data/scn.sqlite');
 const STATIC_DIR = process.env['STATIC_DIR'] ?? resolve('dist/demo/browser');
 const SECURE_COOKIES = process.env['SECURE_COOKIES'] === '1';
+const OTP_DELIVERY_WEBHOOK_URL = process.env['OTP_DELIVERY_WEBHOOK_URL'];
+const IS_PRODUCTION = process.env['NODE_ENV'] === 'production';
+
+function requiredProductionSecret(name: string): string {
+  const value = process.env[name];
+  if (!value || value.length < 32) {
+    throw new Error(`${name} must be set to a random 32+ character secret in production.`);
+  }
+  return value;
+}
 
 async function main(): Promise<void> {
+  const auditKey = IS_PRODUCTION
+    ? requiredProductionSecret('AUDIT_SIGNING_KEY')
+    : process.env['AUDIT_SIGNING_KEY'];
+  if (IS_PRODUCTION && (!process.env['OTP_PEPPER'] || process.env['OTP_PEPPER']!.length < 32)) {
+    throw new Error('OTP_PEPPER must be set to a random 32+ character secret in production.');
+  }
+  if (IS_PRODUCTION && !OTP_DELIVERY_WEBHOOK_URL) {
+    throw new Error('OTP_DELIVERY_WEBHOOK_URL is required in production.');
+  }
+  if (IS_PRODUCTION && (!process.env['ADMIN_EMAIL'] || !process.env['ADMIN_PASSWORD'])) {
+    throw new Error('ADMIN_EMAIL and ADMIN_PASSWORD are required in production.');
+  }
+
   mkdirSync(dirname(DB_PATH), { recursive: true });
   const db = openDatabase(DB_PATH);
 
@@ -57,16 +80,30 @@ async function main(): Promise<void> {
   const ctx: ApiContext = {
     db,
     now: () => Date.now(),
-    /**
-     * FR-A3/FR-A4 (DECIDE): one-time codes for passwordless sign-in and
-     * password reset. This transport prints the code to the server log so the
-     * flow is complete and testable end to end. Wire a real email/SMS
-     * provider before the tool handles live member data — until then, staff
-     * hand the code over at the counter.
-     */
-    deliverCode: (to, code, purpose) => {
-      const target = to.email ?? to.phone ?? 'unknown';
-      console.log(`[code] ${purpose} code for ${target}: ${code} (expires in 10 minutes)`);
+    auditKey,
+    /** A vetted mail/SMS service receives codes through a server-side webhook. */
+    deliverCode: async (to, code, purpose) => {
+      if (OTP_DELIVERY_WEBHOOK_URL) {
+        const response = await fetch(OTP_DELIVERY_WEBHOOK_URL, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            ...(process.env['OTP_DELIVERY_WEBHOOK_TOKEN']
+              ? { authorization: `Bearer ${process.env['OTP_DELIVERY_WEBHOOK_TOKEN']}` }
+              : {}),
+          },
+          body: JSON.stringify({ to, code, purpose, expiresInSeconds: 600 }),
+          signal: AbortSignal.timeout(10_000),
+        });
+        if (!response.ok) throw new Error(`OTP delivery webhook returned ${response.status}.`);
+        return;
+      }
+      if (process.env['DEV_OTP_LOGGING'] === '1' && !IS_PRODUCTION) {
+        const target = to.email ?? to.phone ?? 'unknown';
+        console.log(`[development-only] ${purpose} code for ${target}: ${code}`);
+        return;
+      }
+      throw new Error('OTP delivery is not configured.');
     },
   };
 

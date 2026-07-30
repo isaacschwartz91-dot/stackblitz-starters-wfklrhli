@@ -12,6 +12,8 @@
  *      reimbursement claim cannot be attacker-controlled.
  */
 
+import { createHmac } from 'node:crypto';
+
 import type {
   Account,
   AuditAction,
@@ -24,13 +26,14 @@ import type {
   Principal,
   ProgramProfile,
 } from '../src/shared/types';
-import { DIETARY_TAGS } from '../src/shared/types';
+import { DIETARY_TAGS, SHELF_LIFE_CLASSES } from '../src/shared/types';
 import { evaluateOrder } from '../src/shared/compliance/engine';
 import { generateMealPlan, hashOrderLines } from '../src/shared/mealplan/planner';
 import {
   validateHouseholdInput,
   validateProfile,
   validateQuantity,
+  requiresNewVersion,
 } from '../src/shared/validation';
 import { importCatalogRows, exportCatalogCsv, parseCsv, toCsv, inferColumnMapping } from '../src/shared/csv';
 import { centsToPlain, unitsToServings } from '../src/shared/units';
@@ -89,10 +92,17 @@ export interface ApiContext {
    * FR-A3/FR-A4 delivery of one-time codes. The default transport writes to
    * the server log; a real email/SMS provider must be wired before launch.
    */
-  deliverCode: (to: { email: string | null; phone: string | null }, code: string, purpose: string) => void;
+  deliverCode: (
+    to: { email: string | null; phone: string | null },
+    code: string,
+    purpose: string,
+  ) => void | Promise<void>;
+  /** Required in production; used to make audit records tamper-evident. */
+  auditKey?: string;
 }
 
 const SESSION_TTL_MS = 30 * 60 * 1000; // FR-A5: 30 minutes of inactivity.
+const SESSION_MAX_TTL_MS = 12 * 60 * 60 * 1000;
 const OTP_TTL_MS = 10 * 60 * 1000;
 const OTP_MAX_ATTEMPTS = 5;
 
@@ -131,11 +141,31 @@ function audit(
         }`
       : 'anonymous');
 
+  const at = new Date(ctx.now()).toISOString();
+  const detailJson = JSON.stringify(detail);
+  const previousHash = (
+    ctx.db
+      .prepare('SELECT integrity_hash FROM audit_events WHERE integrity_hash IS NOT NULL ORDER BY rowid DESC LIMIT 1')
+      .get() as { integrity_hash?: string } | undefined
+  )?.integrity_hash ?? null;
+  const unsigned = JSON.stringify({
+    previousHash,
+    orderId: options.orderId ?? null,
+    actor: actorLabel,
+    actorAccountId,
+    onBehalfOf,
+    action,
+    detail: detailJson,
+    at,
+  });
+  const auditKey = ctx.auditKey ?? process.env['AUDIT_SIGNING_KEY'] ?? 'development-only-audit-key';
+  const integrityHash = createHmac('sha256', auditKey).update(unsigned).digest('hex');
+
   ctx.db
     .prepare(
       `INSERT INTO audit_events (id, order_id, actor, actor_account_id,
-        on_behalf_of_account_id, action, detail_json, at)
-       VALUES (?,?,?,?,?,?,?,?)`,
+        on_behalf_of_account_id, action, detail_json, at, prev_hash, integrity_hash)
+       VALUES (?,?,?,?,?,?,?,?,?,?)`,
     )
     .run(
       newId('audit'),
@@ -144,8 +174,10 @@ function audit(
       actorAccountId,
       onBehalfOf,
       action,
-      JSON.stringify(detail),
-      new Date(ctx.now()).toISOString(),
+      detailJson,
+      at,
+      previousHash,
+      integrityHash,
     );
 }
 
@@ -172,17 +204,28 @@ function createSession(
       tokenHash,
       accountId,
       new Date(now).toISOString(),
-      new Date(now + SESSION_TTL_MS).toISOString(),
+       new Date(Math.min(now + SESSION_TTL_MS, now + SESSION_MAX_TTL_MS)).toISOString(),
       actingAsAccountId,
     );
+  ctx.db
+    .prepare('UPDATE sessions SET max_expires_at = ? WHERE id = ?')
+    .run(new Date(now + SESSION_MAX_TTL_MS).toISOString(), tokenHash);
   return token;
 }
 
 /** FR-A5: activity slides the expiry forward; inactivity lets it lapse. */
 function touchSession(ctx: ApiContext, sessionId: string): void {
+  const candidate = new Date(ctx.now() + SESSION_TTL_MS).toISOString();
   ctx.db
-    .prepare('UPDATE sessions SET expires_at = ? WHERE id = ?')
-    .run(new Date(ctx.now() + SESSION_TTL_MS).toISOString(), sessionId);
+    .prepare(
+      `UPDATE sessions
+       SET expires_at = CASE
+         WHEN max_expires_at IS NOT NULL AND max_expires_at < ? THEN max_expires_at
+         ELSE ?
+       END
+       WHERE id = ?`,
+    )
+    .run(candidate, candidate, sessionId);
 }
 
 function auth(ctx: ApiContext, request: ApiRequest): Guard<Principal> {
@@ -203,9 +246,9 @@ export async function handle(ctx: ApiContext, request: ApiRequest): Promise<ApiR
 
     // --- unauthenticated auth endpoints
     if (path === '/api/auth/sign-in' && method === 'POST') return await signIn(ctx, request);
-    if (path === '/api/auth/request-code' && method === 'POST') return requestCode(ctx, request, 'sign_in');
+    if (path === '/api/auth/request-code' && method === 'POST') return await requestCode(ctx, request, 'sign_in');
     if (path === '/api/auth/verify-code' && method === 'POST') return verifyCode(ctx, request);
-    if (path === '/api/auth/request-reset' && method === 'POST') return requestCode(ctx, request, 'password_reset');
+    if (path === '/api/auth/request-reset' && method === 'POST') return await requestCode(ctx, request, 'password_reset');
     if (path === '/api/auth/reset' && method === 'POST') return await resetPassword(ctx, request);
 
     // --- everything below requires a valid session
@@ -355,6 +398,10 @@ async function signIn(ctx: ApiContext, request: ApiRequest): Promise<ApiResponse
     audit(ctx, 'sign_in_failed', { identifier, reason: 'unknown_identifier' });
     return json(401, { error: 'That sign-in was not recognised.' });
   }
+  if (account.status === 'suspended' && account.role !== 'customer') {
+    audit(ctx, 'sign_in_failed', { accountId: account.id, reason: 'suspended_staff' });
+    return json(403, { error: 'This staff account is suspended.' });
+  }
 
   const secrets = repo.accountSecrets(ctx.db, account.id);
   const now = ctx.now();
@@ -388,17 +435,19 @@ async function signIn(ctx: ApiContext, request: ApiRequest): Promise<ApiResponse
 }
 
 /** FR-A3/FR-A4: passwordless code, for sign-in or for a reset. */
-function requestCode(
+async function requestCode(
   ctx: ApiContext,
   request: ApiRequest,
   purpose: 'sign_in' | 'password_reset',
-): ApiResponse {
+): Promise<ApiResponse> {
   const body = asRecord(request.body);
   const identifier = asString(body['identifier']).trim();
 
-  const limit = checkRateLimit(ctx.db, `otp:ip:${request.ip}`, RESET_RATE_LIMIT, ctx.now());
-  if (!limit.allowed) {
-    return json(429, { error: 'Too many requests. Try again later.', retryAfterMs: limit.retryAfterMs });
+  for (const bucket of [`otp:ip:${request.ip}`, `otp:id:${identifier.toLowerCase()}`]) {
+    const limit = checkRateLimit(ctx.db, bucket, RESET_RATE_LIMIT, ctx.now());
+    if (!limit.allowed) {
+      return json(429, { error: 'Too many requests. Try again later.', retryAfterMs: limit.retryAfterMs });
+    }
   }
 
   const account = repo.findAccountByIdentifier(ctx.db, identifier);
@@ -408,9 +457,24 @@ function requestCode(
     message: 'If that account exists, a code has been sent.',
   });
   if (!account) return generic;
+  if (account.status === 'suspended' && account.role !== 'customer') return generic;
 
   const code = generateOtp();
   const now = ctx.now();
+  try {
+    await ctx.deliverCode({ email: account.email, phone: account.phone }, code, purpose);
+  } catch {
+    audit(ctx, 'otp_delivery_failed', { accountId: account.id, purpose });
+    // Keep the indistinguishable response even during a provider outage.
+    // Otherwise the outage itself becomes an account-enumeration oracle.
+    return generic;
+  }
+
+  // Only the most recently delivered code is usable. This prevents a stale
+  // email or SMS from becoming a second active credential.
+  ctx.db
+    .prepare('UPDATE otp_codes SET consumed_at = ? WHERE account_id = ? AND purpose = ? AND consumed_at IS NULL')
+    .run(new Date(now).toISOString(), account.id, purpose);
   ctx.db
     .prepare(
       `INSERT INTO otp_codes (id, account_id, code_hash, purpose, expires_at, consumed_at, attempts, created_at)
@@ -425,8 +489,7 @@ function requestCode(
       new Date(now).toISOString(),
     );
 
-  ctx.deliverCode({ email: account.email, phone: account.phone }, code, purpose);
-  audit(ctx, purpose === 'sign_in' ? 'password_reset_requested' : 'password_reset_requested', {
+  audit(ctx, 'otp_requested', {
     accountId: account.id,
     purpose,
   });
@@ -448,6 +511,9 @@ function consumeOtp(
   const account = repo.findAccountByIdentifier(ctx.db, identifier);
   const invalid = json(401, { error: 'That code is not valid.' });
   if (!account) return { ok: false, response: invalid };
+  if (account.status === 'suspended' && account.role !== 'customer') {
+    return { ok: false, response: json(403, { error: 'This staff account is suspended.' }) };
+  }
 
   const row = ctx.db
     .prepare(
@@ -477,10 +543,13 @@ function consumeOtp(
 
 function verifyCode(ctx: ApiContext, request: ApiRequest): ApiResponse {
   const body = asRecord(request.body);
-  const limit = checkRateLimit(ctx.db, `otpverify:ip:${request.ip}`, SIGN_IN_RATE_LIMIT, ctx.now());
-  if (!limit.allowed) return json(429, { error: 'Too many attempts. Try again later.' });
+  const identifier = asString(body['identifier']);
+  for (const bucket of [`otpverify:ip:${request.ip}`, `otpverify:id:${identifier.trim().toLowerCase()}`]) {
+    const limit = checkRateLimit(ctx.db, bucket, SIGN_IN_RATE_LIMIT, ctx.now());
+    if (!limit.allowed) return json(429, { error: 'Too many attempts. Try again later.' });
+  }
 
-  const check = consumeOtp(ctx, asString(body['identifier']), asString(body['code']), 'sign_in');
+  const check = consumeOtp(ctx, identifier, asString(body['code']), 'sign_in');
   if (!check.ok) return check.response!;
 
   const account = repo.findAccountById(ctx.db, check.accountId!)!;
@@ -494,13 +563,18 @@ function verifyCode(ctx: ApiContext, request: ApiRequest): ApiResponse {
 
 async function resetPassword(ctx: ApiContext, request: ApiRequest): Promise<ApiResponse> {
   const body = asRecord(request.body);
+  const identifier = asString(body['identifier']);
+  for (const bucket of [`otpreset:ip:${request.ip}`, `otpreset:id:${identifier.trim().toLowerCase()}`]) {
+    const limit = checkRateLimit(ctx.db, bucket, SIGN_IN_RATE_LIMIT, ctx.now());
+    if (!limit.allowed) return json(429, { error: 'Too many attempts. Try again later.' });
+  }
   const newPassword = asString(body['newPassword']);
   const problem = passwordProblem(newPassword);
   if (problem) return json(400, { error: problem });
 
   const check = consumeOtp(
     ctx,
-    asString(body['identifier']),
+    identifier,
     asString(body['code']),
     'password_reset',
   );
@@ -657,6 +731,13 @@ async function accountAction(
 
   const target = repo.findAccountById(ctx.db, accountId);
   if (!target) return json(404, { error: 'Not found.' });
+  // A staff member may serve customers, but must never be able to alter a
+  // peer or administrator. Without this check, reset-password is a complete
+  // privilege-escalation route.
+  if (target.role !== 'customer') {
+    const adminGuard = requireAdmin(me);
+    if (!adminGuard.ok) return fromDenial(adminGuard);
+  }
   const now = new Date(ctx.now()).toISOString();
 
   switch (action) {
@@ -705,7 +786,7 @@ async function accountAction(
     case 'revoke-sessions': {
       // NFR-9: forced sign-out after a suspected compromise.
       const count = repo.revokeAllSessions(ctx.db, accountId, now);
-      audit(ctx, 'account_unlocked', { accountId, revokedSessions: count }, { principal: me });
+      audit(ctx, 'sessions_revoked', { accountId, revokedSessions: count }, { principal: me });
       return json(200, { revoked: count });
     }
     default:
@@ -749,8 +830,10 @@ function startOrder(ctx: ApiContext, me: Principal): ApiResponse {
     revision: 1,
     lastWriterId: me.account.id,
   };
-  repo.upsertOrder(ctx.db, order);
-  audit(ctx, 'order_created', { referralId: household.referralId }, { principal: me, orderId: order.id });
+  transact(ctx.db, () => {
+    repo.upsertOrder(ctx.db, order);
+    audit(ctx, 'order_created', { referralId: household.referralId }, { principal: me, orderId: order.id });
+  });
   return json(201, { order, resumed: false });
 }
 
@@ -758,7 +841,10 @@ function startOrder(ctx: ApiContext, me: Principal): ApiResponse {
 function buildRulesSnapshot(ctx: ApiContext, profile: ProgramProfile, memberCount: number) {
   const categories = repo
     .listCategories(ctx.db)
-    .filter((c) => c.active && profile.requirements.some((r) => r.categoryKey === c.key))
+    // Program requirements never disappear merely because an admin hides a
+    // category from catalog administration. Otherwise an empty order can
+    // qualify after categories are deactivated.
+    .filter((c) => profile.requirements.some((r) => r.categoryKey === c.key))
     .sort((a, b) => a.sortOrder - b.sortOrder)
     .map((c) => ({ key: c.key, label: c.label, unitLabel: c.unitLabel, sortOrder: c.sortOrder }));
 
@@ -830,11 +916,16 @@ function setLines(
 
   const existingByItem = new Map(order.lines.map((l) => [l.itemId, l]));
   const lines: OrderLine[] = [];
+  const seenItemIds = new Set<string>();
   const now = new Date(ctx.now()).toISOString();
 
   for (const raw of incoming) {
     const entry = asRecord(raw);
     const itemId = asString(entry['itemId']);
+    if (seenItemIds.has(itemId)) {
+      return json(400, { error: 'Each catalog item may appear only once in an order.' });
+    }
+    seenItemIds.add(itemId);
 
     // A quantity that is present but not a whole package is an error, not a
     // line to skip. Dropping it silently would quietly shrink an order that
@@ -888,7 +979,10 @@ function setLines(
     lastWriterId: me.account.id,
     totalCents: lines.reduce((sum, l) => sum + l.unitPriceCentsSnapshot * l.qty, 0),
   };
-  repo.upsertOrder(ctx.db, updated);
+  transact(ctx.db, () => {
+    repo.upsertOrder(ctx.db, updated);
+    audit(ctx, 'order_updated', { revision: updated.revision, lineCount: lines.length }, { principal: me, orderId: order.id });
+  });
 
   return json(200, {
     order: updated,
@@ -964,21 +1058,22 @@ function finalizeOrder(
     revision: order.revision + 1,
     lastWriterId: me.account.id,
   };
-  repo.upsertOrder(ctx.db, finalized);
-
-  if (override) {
-    audit(ctx, 'override_applied', { ...override }, { principal: me, orderId: order.id });
-  }
-  audit(
-    ctx,
-    'order_finalized',
-    {
-      totalCents: finalized.totalCents,
-      capTotalCents: finalized.rulesSnapshot.capTotalCents,
-      overridden: override !== null,
-    },
-    { principal: me, orderId: order.id },
-  );
+  transact(ctx.db, () => {
+    repo.upsertOrder(ctx.db, finalized);
+    if (override) {
+      audit(ctx, 'override_applied', { ...override }, { principal: me, orderId: order.id });
+    }
+    audit(
+      ctx,
+      'order_finalized',
+      {
+        totalCents: finalized.totalCents,
+        capTotalCents: finalized.rulesSnapshot.capTotalCents,
+        overridden: override !== null,
+      },
+      { principal: me, orderId: order.id },
+    );
+  });
 
   return json(200, { order: finalized, compliance: result });
 }
@@ -1043,10 +1138,40 @@ function saveProfile(ctx: ApiContext, me: Principal, request: ApiRequest): ApiRe
     requirements: incoming.requirements ?? [],
     mealSplits: incoming.mealSplits ?? [],
   });
+  const categoryKeys = new Set(repo.listCategories(ctx.db).map((category) => category.key));
+  for (const requirement of incoming.requirements ?? []) {
+    if (!categoryKeys.has(requirement.categoryKey)) {
+      issues.push({ field: `requirement.${requirement.categoryKey}`, message: 'Each requirement must use an existing category.' });
+    }
+  }
+  if (incoming.capBasis !== 'per_member' && incoming.capBasis !== 'per_order') {
+    issues.push({ field: 'capBasis', message: 'Cap basis must be per member or per order.' });
+  }
+  if (!isIsoDate(incoming.effectiveFrom)) {
+    issues.push({ field: 'effectiveFrom', message: 'Effective-from must be a valid calendar date.' });
+  }
+  if (incoming.effectiveTo !== null && !isIsoDate(incoming.effectiveTo)) {
+    issues.push({ field: 'effectiveTo', message: 'Effective-to must be a valid calendar date.' });
+  }
+  for (const cls of SHELF_LIFE_CLASSES) {
+    const horizon = incoming.shelfLifeHorizonDays?.[cls];
+    if (horizon !== null && (!Number.isInteger(horizon) || horizon < 0 || horizon >= incoming.daysCovered)) {
+      issues.push({ field: `shelfLifeHorizonDays.${cls}`, message: 'Shelf-life horizons must be a day within the benefit period or blank.' });
+    }
+  }
   if (issues.length > 0) return json(400, { error: issues[0]!.message, issues });
 
   const existing = repo.findProfile(ctx.db, incoming.id);
-  const newVersion = body['newVersion'] === true;
+  const newVersion =
+    body['newVersion'] === true ||
+    (existing !== null &&
+      requiresNewVersion(existing, {
+        daysCovered: incoming.daysCovered,
+        capAmountCents: incoming.capAmountCents,
+        capBasis: incoming.capBasis,
+        requirements: incoming.requirements,
+        mealSplits: incoming.mealSplits,
+      }));
 
   // FR-2: rule changes create a new version so completed orders keep meaning.
   if (existing && newVersion) {
@@ -1124,12 +1249,16 @@ function saveItem(ctx: ApiContext, me: Principal, request: ApiRequest): ApiRespo
   const categoryKey = asString(incoming['categoryKey']);
   const priceCents = asInt(incoming['priceCents']);
   const servings = asInt(incoming['servingsPerPackageUnits']);
+  const shelfLifeClass = asString(incoming['shelfLifeClass']) || 'shelf_stable';
 
   if (!name) return json(400, { error: 'Item name is required.' });
   if (priceCents === null || priceCents < 0) return json(400, { error: 'Price must be zero or more, in cents.' });
   if (servings === null || servings < 0) return json(400, { error: 'Servings per package must be zero or more.' });
   if (!repo.listCategories(ctx.db).some((c) => c.key === categoryKey)) {
     return json(400, { error: 'Unknown category.' });
+  }
+  if (!(SHELF_LIFE_CLASSES as readonly string[]).includes(shelfLifeClass)) {
+    return json(400, { error: 'Unknown shelf-life class.' });
   }
 
   const id = asString(incoming['id']);
@@ -1150,7 +1279,7 @@ function saveItem(ctx: ApiContext, me: Principal, request: ApiRequest): ApiRespo
           (t): t is DietaryTag => typeof t === 'string' && (DIETARY_TAGS as readonly string[]).includes(t),
         )
       : [],
-    shelfLifeClass: (asString(incoming['shelfLifeClass']) || 'shelf_stable') as Item['shelfLifeClass'],
+    shelfLifeClass: shelfLifeClass as Item['shelfLifeClass'],
     active: incoming['active'] !== false,
     updatedAt: new Date(ctx.now()).toISOString(),
   };
@@ -1170,6 +1299,17 @@ function saveItem(ctx: ApiContext, me: Principal, request: ApiRequest): ApiRespo
   }
   audit(ctx, existing ? 'item_updated' : 'item_created', { itemId: item.id, name: item.name }, { principal: me });
   return json(existing ? 200 : 201, { item });
+}
+
+function isIsoDate(value: unknown): value is string {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split('-').map(Number);
+  const parsed = new Date(Date.UTC(year!, month! - 1, day!));
+  return (
+    parsed.getUTCFullYear() === year &&
+    parsed.getUTCMonth() === month! - 1 &&
+    parsed.getUTCDate() === day
+  );
 }
 
 /** FR-5 */

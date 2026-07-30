@@ -175,6 +175,8 @@ export interface SessionRecord {
   accountId: string;
   issuedAt: string;
   expiresAt: string;
+  /** Hard session ceiling. Activity can extend idle expiry only up to this time. */
+  maxExpiresAt: string | null;
   revokedAt: string | null;
   /** FR-A6: set only while staff are acting on a customer's behalf. */
   actingAsAccountId: string | null;
@@ -348,10 +350,13 @@ export type AuditAction =
   | 'account_suspended'
   | 'account_reinstated'
   | 'password_reset_requested'
+  | 'otp_requested'
+  | 'otp_delivery_failed'
   | 'password_reset_completed'
   | 'staff_password_reset'
   | 'assist_mode_started'
   | 'assist_mode_ended'
+  | 'sessions_revoked'
   | 'authorization_denied'
   | 'profile_created'
   | 'profile_updated'
@@ -364,6 +369,7 @@ export type AuditAction =
   | 'item_deactivated'
   | 'catalog_imported'
   | 'order_created'
+  | 'order_updated'
   | 'order_finalized'
   | 'order_voided'
   | 'override_applied'
@@ -390,6 +396,9 @@ export interface AuditEvent {
   action: AuditAction;
   detail: Record<string, unknown>;
   at: string;
+  /** HMAC-linked to the preceding event. Null only for pre-migration records. */
+  previousHash: string | null;
+  integrityHash: string | null;
 }
 
 export type RestrictionMode = 'hide' | 'flag';

@@ -174,7 +174,9 @@ export function evaluateOrder(
 
       // Variety counts only items that actually credit servings.
       const distinctItems = new Set(
-        contributions.filter((c) => c.unitsPerPackage > 0).map((c) => c.lineId),
+        lines
+          .filter((line) => line.categorySnapshot === cat.key && line.servingsUnitsSnapshot > 0 && line.qty > 0)
+          .map((line) => line.itemId),
       ).size;
       const minDistinctItems = requirement?.minDistinctItems ?? null;
       const varietyShortfall =

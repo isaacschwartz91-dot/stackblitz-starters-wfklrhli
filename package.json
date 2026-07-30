@@ -1,6 +1,7 @@
 {
   "name": "scn-food-order-builder",
   "private": true,
+  "type": "module",
   "scripts": {
     "ng": "ng",
     "start": "node --import ./tools/ts-resolver.mjs server/index.ts",
@@ -10,24 +11,25 @@
     "typecheck": "tsc -p tsconfig.app.json --noEmit",
     "serve:api": "node --import ./tools/ts-resolver.mjs server/index.ts",
     "build:client": "ng build",
-    "test:e2e": "node tools/smoke.mjs",
+    "test:e2e": "npm run build:client && node tools/smoke.mjs",
     "start:dev": "ng serve",
     "local": "npm run build:client && npm start"
   },
   "dependencies": {
-    "@angular/common": "^21.1.0",
-    "@angular/compiler": "^21.1.0",
-    "@angular/core": "^21.1.0",
-    "@angular/forms": "^21.1.0",
-    "@angular/platform-browser": "^21.1.0",
-    "@angular/router": "^21.1.0",
+    "@angular/common": "21.2.19",
+    "@angular/compiler": "21.2.19",
+    "@angular/core": "21.2.19",
+    "@angular/forms": "21.2.19",
+    "@angular/platform-browser": "21.2.19",
+    "@angular/router": "21.2.19",
     "rxjs": "^7.8.1",
     "tslib": "^2.5.0"
   },
   "devDependencies": {
-    "@angular/build": "^21.1.0",
-    "@angular/cli": "^21.1.0",
-    "@angular/compiler-cli": "^21.1.0",
+    "@angular/build": "21.2.19",
+    "@angular/cli": "21.2.19",
+    "@angular/compiler-cli": "21.2.19",
+    "playwright": "1.62.0",
     "typescript": "^5.9.3"
   },
   "engines": {

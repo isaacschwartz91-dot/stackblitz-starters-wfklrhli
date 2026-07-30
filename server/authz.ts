@@ -77,6 +77,13 @@ export function authenticate(
   const account = findAccountById(db, session.accountId);
   if (!account) return deny('unauthenticated', 401, 'Sign in to continue.');
 
+  // Customers retain the deliberately limited history access described by
+  // FR-A7. A suspended employee must lose every privileged route immediately;
+  // otherwise suspension is only a cosmetic database field.
+  if (account.status === 'suspended' && account.role !== 'customer') {
+    return deny('suspended', 403, 'This staff account is suspended.');
+  }
+
   // FR-A6: in assist mode the acting account is staff; the data belongs to
   // the customer. Both identities are carried so the audit log can name the
   // staff member rather than the customer.

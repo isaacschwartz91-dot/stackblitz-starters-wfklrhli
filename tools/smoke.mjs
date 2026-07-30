@@ -9,10 +9,61 @@
  */
 
 import { chromium } from 'playwright';
+import { spawn } from 'node:child_process';
+import { rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 
 const BASE = process.env.BASE ?? 'http://127.0.0.1:4300';
 const ADMIN = { id: 'owner@store.test', pw: 'smoke-test-password' };
 const CUSTOMER = { id: 'shopper@example.test', pw: 'customer-password-1' };
+const root = resolve(import.meta.dirname, '..');
+const databasePath = join(tmpdir(), `scn-e2e-${process.pid}-${Date.now()}.sqlite`);
+const port = Number(new URL(BASE).port || 4300);
+
+const server = spawn(process.execPath, ['--import', './tools/ts-resolver.mjs', 'server/index.ts'], {
+  cwd: root,
+  env: {
+    ...process.env,
+    NODE_ENV: 'test',
+    PORT: String(port),
+    DB_PATH: databasePath,
+    STATIC_DIR: resolve(root, 'dist/demo/browser'),
+    ADMIN_EMAIL: ADMIN.id,
+    ADMIN_PASSWORD: ADMIN.pw,
+  },
+  stdio: ['ignore', 'pipe', 'pipe'],
+});
+
+async function waitForServer() {
+  const deadline = Date.now() + 30_000;
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetch(`${BASE}/api/health`);
+      if (response.ok) return;
+    } catch {
+      // The server has not bound its port yet.
+    }
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 100));
+  }
+  throw new Error('Timed out waiting for the smoke-test server to start.');
+}
+
+async function shutdownServer() {
+  if (!server.killed) {
+    server.kill('SIGTERM');
+    await new Promise((resolvePromise) => server.once('exit', resolvePromise));
+  }
+  await Promise.all(
+    [databasePath, `${databasePath}-wal`, `${databasePath}-shm`].map((file) =>
+      rm(file, { force: true }),
+    ),
+  );
+}
+
+server.stderr.on('data', (chunk) => process.stderr.write(chunk));
+process.on('exit', () => server.kill());
+await waitForServer();
 
 const results = [];
 function check(name, condition, detail = '') {
@@ -20,7 +71,7 @@ function check(name, condition, detail = '') {
   console.log(`${condition ? 'PASS' : 'FAIL'}  ${name}${detail ? ` — ${detail}` : ''}`);
 }
 
-const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+const browser = await chromium.launch();
 
 async function newPage() {
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
@@ -371,6 +422,7 @@ async function signIn(page, who) {
 }
 
 await browser.close();
+await shutdownServer();
 
 const failed = results.filter((r) => !r.ok);
 console.log(`\n${results.length - failed.length}/${results.length} checks passed`);

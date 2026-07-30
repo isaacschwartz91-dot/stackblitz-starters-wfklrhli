@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   account_id           TEXT NOT NULL REFERENCES accounts(id),
   issued_at            TEXT NOT NULL,
   expires_at           TEXT NOT NULL,
+  max_expires_at       TEXT,
   revoked_at           TEXT,
   acting_as_account_id TEXT REFERENCES accounts(id)
 );
@@ -163,7 +164,9 @@ CREATE TABLE IF NOT EXISTS audit_events (
   on_behalf_of_account_id TEXT,
   action                  TEXT NOT NULL,
   detail_json             TEXT NOT NULL DEFAULT '{}',
-  at                      TEXT NOT NULL
+  at                      TEXT NOT NULL,
+  prev_hash               TEXT,
+  integrity_hash          TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_audit_at ON audit_events(at);
 CREATE INDEX IF NOT EXISTS idx_audit_order ON audit_events(order_id);
@@ -177,7 +180,28 @@ CREATE TABLE IF NOT EXISTS settings (
 export function openDatabase(path: string): Db {
   const db = new DatabaseSync(path);
   db.exec(SCHEMA);
+  migrate(db);
   return db;
+}
+
+/**
+ * This project predates a migration framework, so deployed SQLite files need
+ * additive migrations here rather than relying on CREATE TABLE IF NOT EXISTS.
+ * New schema changes must be added to this list and covered by an upgrade test.
+ */
+function migrate(db: Db): void {
+  ensureColumn(db, 'sessions', 'max_expires_at TEXT');
+  ensureColumn(db, 'audit_events', 'prev_hash TEXT');
+  ensureColumn(db, 'audit_events', 'integrity_hash TEXT');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_audit_integrity ON audit_events(integrity_hash)');
+}
+
+function ensureColumn(db: Db, table: string, definition: string): void {
+  const name = definition.split(/\s+/, 1)[0]!;
+  const columns = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  if (!columns.some((column) => column.name === name)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${definition}`);
+  }
 }
 
 /** Run a function inside a transaction, rolling back on any throw. */

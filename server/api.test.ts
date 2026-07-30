@@ -132,6 +132,21 @@ describe('NFR-2: password storage', () => {
   });
 });
 
+describe('NFR-6: audit integrity', () => {
+  test('new audit events form a tamper-evident HMAC chain', async () => {
+    const h = await makeHarness();
+    await signIn(h, ADMIN_EMAIL, ADMIN_PASSWORD);
+    const rows = h.ctx.db
+      .prepare('SELECT prev_hash, integrity_hash FROM audit_events ORDER BY rowid ASC')
+      .all() as { prev_hash: string | null; integrity_hash: string | null }[];
+    assert.ok(rows.length > 0);
+    for (let index = 0; index < rows.length; index++) {
+      assert.match(rows[index]!.integrity_hash ?? '', /^[a-f0-9]{64}$/);
+      assert.equal(rows[index]!.prev_hash, index === 0 ? null : rows[index - 1]!.integrity_hash);
+    }
+  });
+});
+
 describe('FR-A1: accounts are created by staff, never by self-registration', () => {
   let h: Harness;
   before(async () => {
@@ -184,6 +199,43 @@ describe('FR-A1: accounts are created by staff, never by self-registration', () 
       body: { role: 'admin', email: 'admin-2@store.test', password: 'another-admin-pw' },
     });
     assert.equal(attempt.status, 403, 'staff must not be able to create an admin');
+  });
+
+  test('staff cannot reset, suspend, or revoke an administrator', async () => {
+    const adminToken = await signIn(h, ADMIN_EMAIL, ADMIN_PASSWORD);
+    const created = await req(h, 'POST', '/api/staff/accounts', {
+      token: adminToken,
+      body: { role: 'staff', email: 'least-privilege@store.test', password: 'staff-password-1' },
+    });
+    assert.equal(created.status, 201);
+    const staffToken = await signIn(h, 'least-privilege@store.test', 'staff-password-1');
+    const admin = repo.findAccountByIdentifier(h.ctx.db, ADMIN_EMAIL)!;
+
+    for (const action of ['reset-password', 'suspend', 'revoke-sessions']) {
+      const response = await req(h, 'POST', `/api/staff/accounts/${admin.id}/${action}`, {
+        token: staffToken,
+        body: action === 'reset-password' ? { password: 'attacker-chosen-password' } : {},
+      });
+      assert.equal(response.status, 403, `staff must not ${action} an administrator`);
+    }
+    assert.equal((await req(h, 'POST', '/api/auth/sign-in', {
+      body: { identifier: ADMIN_EMAIL, password: ADMIN_PASSWORD },
+    })).status, 200, 'the administrator password must be unchanged');
+  });
+
+  test('a suspended staff member loses privileged access immediately', async () => {
+    const adminToken = await signIn(h, ADMIN_EMAIL, ADMIN_PASSWORD);
+    const created = await req(h, 'POST', '/api/staff/accounts', {
+      token: adminToken,
+      body: { role: 'staff', email: 'suspended-staff@store.test', password: 'staff-password-1' },
+    });
+    const staffId = bodyOf(created)['account'].id as string;
+    const staffToken = await signIn(h, 'suspended-staff@store.test', 'staff-password-1');
+    assert.equal((await req(h, 'POST', `/api/staff/accounts/${staffId}/suspend`, { token: adminToken })).status, 200);
+    assert.equal((await req(h, 'GET', '/api/staff/accounts', { token: staffToken })).status, 403);
+    assert.equal((await req(h, 'POST', '/api/auth/sign-in', {
+      body: { identifier: 'suspended-staff@store.test', password: 'staff-password-1' },
+    })).status, 403);
   });
 });
 
@@ -632,6 +684,17 @@ describe('the server does not trust the client', () => {
     });
     assert.equal(response.status, 409);
   });
+
+  test('duplicate item ids are rejected rather than bypassing variety rules', async () => {
+    const start = await req(h, 'POST', '/api/orders', { token: customer.token });
+    const orderId = bodyOf(start)['order'].id as string;
+    const item = repo.listItems(h.ctx.db, true)[0]!;
+    const response = await req(h, 'PUT', `/api/orders/${orderId}/lines`, {
+      token: customer.token,
+      body: { lines: [{ itemId: item.id, qty: 1 }, { itemId: item.id, qty: 1 }] },
+    });
+    assert.equal(response.status, 400);
+  });
 });
 
 describe('acceptance criterion 5: a price change cannot alter a finalized order', () => {
@@ -886,6 +949,43 @@ describe('FR-34 / FR-2: records and profile versioning', () => {
     assert.equal(after.rulesSnapshot.daysCovered, 7);
     // The previous version is closed out rather than deleted.
     assert.equal(repo.findProfile(h.ctx.db, 'profile-default-v1')!.effectiveTo, '2026-09-01');
+  });
+
+  test('a mathematical edit versions the profile even if the client asks for an in-place save', async () => {
+    const h = await makeHarness();
+    const adminToken = await signIn(h, ADMIN_EMAIL, ADMIN_PASSWORD);
+    const profile = repo.findProfile(h.ctx.db, 'profile-default-v1')!;
+    const response = await req(h, 'POST', '/api/admin/profiles', {
+      token: adminToken,
+      body: {
+        newVersion: false,
+        profile: { ...profile, capAmountCents: profile.capAmountCents + 100, effectiveFrom: '2026-09-01' },
+      },
+    });
+    assert.equal(response.status, 201);
+    assert.equal(bodyOf(response)['profile'].version, 2);
+    assert.equal(repo.findProfile(h.ctx.db, profile.id)!.capAmountCents, profile.capAmountCents);
+  });
+
+  test('deactivating catalog categories cannot make an empty order qualify', async () => {
+    const h = await makeHarness();
+    const adminToken = await signIn(h, ADMIN_EMAIL, ADMIN_PASSWORD);
+    for (const category of repo.listCategories(h.ctx.db)) {
+      const response = await req(h, 'POST', '/api/admin/categories', {
+        token: adminToken,
+        body: { category: { ...category, active: false } },
+      });
+      assert.equal(response.status, 200);
+    }
+    const customer = await createCustomer(h, adminToken, 'inactive-categories@store.test');
+    const start = await req(h, 'POST', '/api/orders', { token: customer.token });
+    const order = bodyOf(start)['order'];
+    assert.ok(order.rulesSnapshot.categories.length > 0, 'requirements must remain in the snapshot');
+    const finalized = await req(h, 'POST', `/api/orders/${order.id}/finalize`, {
+      token: customer.token,
+      body: {},
+    });
+    assert.equal(finalized.status, 422);
   });
 
   test('an invalid profile is refused with a reason', async () => {

@@ -33,7 +33,7 @@ export function validateHouseholdInput(input: {
   if (!input.referralId.trim()) {
     issues.push({ field: 'referralId', message: 'A referral or authorization ID is required.' });
   }
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.periodStart)) {
+  if (!isIsoDate(input.periodStart)) {
     issues.push({ field: 'periodStart', message: 'Benefit period start must be a valid date.' });
   }
   if (!input.profileId) {
@@ -63,7 +63,18 @@ export function validateProfile(profile: {
     issues.push({ field: 'capAmountCents', message: 'Cap amount must be greater than zero.' });
   }
 
+  if (profile.requirements.length === 0 || !profile.requirements.some((r) => r.servingsPerMemberPerDayUnits > 0)) {
+    issues.push({ field: 'requirements', message: 'At least one category must require servings.' });
+  }
+
+  const requirementKeys = new Set<string>();
   for (const req of profile.requirements) {
+    if (!req.categoryKey.trim()) {
+      issues.push({ field: 'requirement', message: 'Every requirement needs a category.' });
+    } else if (requirementKeys.has(req.categoryKey)) {
+      issues.push({ field: `requirement.${req.categoryKey}`, message: 'A category may have only one requirement.' });
+    }
+    requirementKeys.add(req.categoryKey);
     if (!Number.isInteger(req.servingsPerMemberPerDayUnits) || req.servingsPerMemberPerDayUnits < 0) {
       issues.push({
         field: `requirement.${req.categoryKey}`,
@@ -72,14 +83,18 @@ export function validateProfile(profile: {
     }
     if (
       req.maxServingsPerMemberPerDayUnits !== null &&
-      req.maxServingsPerMemberPerDayUnits < req.servingsPerMemberPerDayUnits
+      (!Number.isInteger(req.maxServingsPerMemberPerDayUnits) ||
+        req.maxServingsPerMemberPerDayUnits < req.servingsPerMemberPerDayUnits)
     ) {
       issues.push({
         field: `requirement.${req.categoryKey}.max`,
         message: 'Maximum servings cannot be below the required minimum.',
       });
     }
-    if (req.minDistinctItems !== null && req.minDistinctItems < 0) {
+    if (
+      req.minDistinctItems !== null &&
+      (!Number.isInteger(req.minDistinctItems) || req.minDistinctItems < 0)
+    ) {
       issues.push({
         field: `requirement.${req.categoryKey}.variety`,
         message: 'Minimum distinct items cannot be negative.',
@@ -89,9 +104,18 @@ export function validateProfile(profile: {
 
   // FR-25: the three meals must account for exactly the daily requirement.
   const byCategory = new Map<string, number>();
+  const splitKeys = new Set<string>();
   for (const split of profile.mealSplits) {
+    if (!requirementKeys.has(split.categoryKey)) {
+      issues.push({ field: `split.${split.categoryKey}`, message: 'Meal splits must belong to a required category.' });
+    }
+    const splitKey = `${split.categoryKey}:${split.meal}`;
+    if (splitKeys.has(splitKey)) {
+      issues.push({ field: `split.${split.categoryKey}.${split.meal}`, message: 'Each meal can have one split per category.' });
+    }
+    splitKeys.add(splitKey);
     byCategory.set(split.categoryKey, (byCategory.get(split.categoryKey) ?? 0) + split.fractionBp);
-    if (split.fractionBp < 0) {
+    if (!Number.isInteger(split.fractionBp) || split.fractionBp < 0 || split.fractionBp > BP_SCALE) {
       issues.push({
         field: `split.${split.categoryKey}.${split.meal}`,
         message: 'Meal split cannot be negative.',
@@ -116,6 +140,18 @@ export function validateProfile(profile: {
   }
 
   return issues;
+}
+
+/** Strict calendar-date validation. Date.parse alone normalizes impossible dates. */
+export function isIsoDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split('-').map(Number);
+  const parsed = new Date(Date.UTC(year!, month! - 1, day!));
+  return (
+    parsed.getUTCFullYear() === year &&
+    parsed.getUTCMonth() === month! - 1 &&
+    parsed.getUTCDate() === day
+  );
 }
 
 /** FR-13: quantities are whole packages. */

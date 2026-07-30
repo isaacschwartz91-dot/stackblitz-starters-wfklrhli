@@ -24,3 +24,13 @@ services:
         sync: false
       - key: ADMIN_PASSWORD
         sync: false
+      # Required production controls. The webhook receives {to, code, purpose}
+      # and is responsible for sending an approved email or SMS.
+      - key: OTP_DELIVERY_WEBHOOK_URL
+        sync: false
+      - key: OTP_DELIVERY_WEBHOOK_TOKEN
+        sync: false
+      - key: OTP_PEPPER
+        generateValue: true
+      - key: AUDIT_SIGNING_KEY
+        generateValue: true

@@ -70,7 +70,12 @@ To start over, stop the server and delete `data/scn.sqlite`.
 | `STATIC_DIR` | `dist/demo/browser` | Where the built client lives. |
 | `SECURE_COOKIES` | off | Set to `1` **only** behind HTTPS. On plain HTTP it makes sign-in fail silently. |
 | `TRUST_PROXY` | off | Set to `1` only behind a reverse proxy. |
-| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | — | First run only. |
+| `OTP_DELIVERY_WEBHOOK_URL` | — | Required in production. HTTPS endpoint that delivers `{ to, code, purpose, expiresInSeconds }`. |
+| `OTP_DELIVERY_WEBHOOK_TOKEN` | — | Optional bearer token sent to the delivery webhook. |
+| `OTP_PEPPER` | — | 32+ random characters in production; protects stored six-digit code hashes. |
+| `AUDIT_SIGNING_KEY` | — | 32+ random characters in production; HMAC-links audit records to make tampering detectable. |
+| `DEV_OTP_LOGGING` | off | Set to `1` only for local development; never enable in a deployed environment. |
+| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | — | Required on the first production start. |
 
 ### First things to try
 
@@ -114,11 +119,14 @@ docker run -d -p 4000:4000 \
   -v scn-data:/data \
   -e ADMIN_EMAIL=you@store.example \
   -e ADMIN_PASSWORD='choose-a-long-one' \
-  -e SECURE_COOKIES=0 \
+  -e OTP_DELIVERY_WEBHOOK_URL=https://delivery.example/otp \
+  -e OTP_PEPPER='random-32-plus-character-secret' \
+  -e AUDIT_SIGNING_KEY='another-random-32-plus-character-secret' \
+  -e SECURE_COOKIES=1 \
   scn-food-order-builder
 ```
 
-Set `SECURE_COOKIES=1` once it is behind HTTPS — with it on, the session
+This production image requires HTTPS. With `SECURE_COOKIES=1`, the session
 cookie is refused over plain HTTP and sign-in will appear to silently fail.
 Set `TRUST_PROXY=1` only when a reverse proxy sits in front; otherwise clients
 can spoof their IP past the rate limiter.
@@ -139,8 +147,9 @@ npm run test:e2e  # 38 checks driven through a real browser (server must be up)
 ```
 
 `npm test` uses Node's built-in test runner and TypeScript support. There is
-no Jest, Vitest, or Karma. The end-to-end suite uses Playwright and drives the
-built client against the real server.
+no Jest, Vitest, or Karma. `npm run test:e2e` builds the client, starts an
+isolated temporary server and database, and drives it through Playwright. Run
+`npx playwright install chromium` once on a new developer machine.
 
 ## How it is put together
 
@@ -199,12 +208,28 @@ code. The store owner should confirm each one:
 | Languages beyond English and Spanish | `src/app/core/i18n.ts` | English, Spanish |
 | Record retention period | server | follow the contract |
 
+## Production safeguards
+
+- **One-time-code delivery is fail-closed.** Production startup requires an
+  HTTPS delivery webhook, `OTP_PEPPER`, and `AUDIT_SIGNING_KEY`; codes are
+  never written to logs. The webhook must be backed by an approved email or
+  SMS provider and monitored for failures.
+- **Backups and restore drills are mandatory.** Back up `/data/scn.sqlite`
+  and its SQLite `-wal`/`-shm` companions from a quiesced service or with a
+  SQLite-aware snapshot process. Encrypt backups, keep them outside the host,
+  and restore one into an isolated environment at least quarterly.
+- **Migrations are additive.** The server applies safe additive schema
+  migrations on startup. Test each upgrade against a copy of production data
+  before deployment; never hand-edit the database.
+- **Retention is a contract decision.** The system intentionally does not
+  delete finalized orders or audit records automatically. Set and document a
+  retention/archival policy with the SCN before production use.
+
 ## Before this handles real member data
 
-- **One-time code delivery is a stub.** Codes are printed to the server log.
-  The sign-in and password-reset flows are complete and tested end to end, but
-  a real email/SMS provider must be wired into `deliverCode` in
-  `server/index.ts` first.
+- **Provision the delivery webhook.** Production refuses to start until it
+  has an HTTPS code-delivery endpoint and the required signing secrets. Test
+  delivery, webhook authentication, and failure alerts before go-live.
 - **Serve over TLS** and set `SECURE_COOKIES=1`.
 - **Have the SCN agreement reviewed.** Whether this arrangement is subject to
   HIPAA depends on the store's agreement with the SCN lead entity. The tool

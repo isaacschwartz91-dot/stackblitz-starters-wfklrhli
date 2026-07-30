@@ -80,8 +80,12 @@ export function parseCsv(text: string): string[][] {
 
 /** Quote a field only when it needs it. */
 export function csvEscape(value: string): string {
-  if (/[",\n\r]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
-  return value;
+  // Excel and similar tools interpret cells starting with these characters as
+  // formulas even when the field is quoted. Exports contain user-entered
+  // names, referral IDs, and override reasons, so force them to text.
+  const safe = /^[=+\-@]/.test(value) ? `'${value}` : value;
+  if (/[",\n\r]/.test(safe)) return `"${safe.replace(/"/g, '""')}"`;
+  return safe;
 }
 
 export function toCsv(rows: readonly (readonly string[])[]): string {

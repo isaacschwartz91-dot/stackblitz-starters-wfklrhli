@@ -82,6 +82,9 @@ function securityHeaders(secure: boolean): Record<string, string> {
     'x-content-type-options': 'nosniff',
     'x-frame-options': 'DENY',
     'referrer-policy': 'no-referrer',
+    'permissions-policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
+    'cross-origin-opener-policy': 'same-origin',
+    'cross-origin-resource-policy': 'same-origin',
     // No third-party origins at all: no analytics, no trackers, no CDN fonts.
     'content-security-policy':
       "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
@@ -99,10 +102,19 @@ function serveStatic(
 ): boolean {
   const root = resolve(staticDir);
   // Normalize before joining so `../` cannot climb out of the static root.
-  const relative = normalize(decodeURIComponent(urlPath)).replace(/^(\.\.[/\\])+/, '');
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(urlPath);
+  } catch {
+    res.writeHead(400, securityHeaders(secure)).end('Malformed path');
+    return true;
+  }
+  const relative = normalize(decoded).replace(/^(\.\.[/\\])+/, '');
   let filePath = join(root, relative);
 
-  if (!resolve(filePath).startsWith(root)) {
+  const resolvedPath = resolve(filePath);
+  const separator = process.platform === 'win32' ? '\\' : '/';
+  if (resolvedPath !== root && !resolvedPath.startsWith(`${root}${separator}`)) {
     res.writeHead(403, securityHeaders(secure)).end('Forbidden');
     return true;
   }
@@ -131,7 +143,7 @@ function serveStatic(
 export function createApiServer(options: ServerOptions) {
   const { ctx, staticDir = null, secureCookies = false } = options;
 
-  return createServer((req, res) => {
+  const server = createServer((req, res) => {
     void (async () => {
       const url = new URL(req.url ?? '/', 'http://localhost');
       const headers = securityHeaders(secureCookies);
@@ -207,6 +219,13 @@ export function createApiServer(options: ServerOptions) {
       res.end(JSON.stringify({ error: 'Something went wrong.' }));
     });
   });
+
+  // Bound slow clients as well as body size. These limits are especially
+  // important because this is a single-process Node service.
+  server.headersTimeout = 15_000;
+  server.requestTimeout = 30_000;
+  server.keepAliveTimeout = 5_000;
+  return server;
 }
 
 export { SESSION_COOKIE };
