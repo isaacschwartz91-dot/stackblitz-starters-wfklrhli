@@ -259,11 +259,8 @@ describe('acceptance criterion 9, over a real socket', () => {
     const order = start.json['order'];
     const items = repo.listItems(ctx.db, true);
 
-    const lines = order.rulesSnapshot.categories.map((cat: { key: string }) => {
-      const required = order.rulesSnapshot.requiredUnitsByCategory[cat.key] as number;
-      const option = items.find((i) => i.categoryKey === cat.key && i.servingsPerPackageUnits > 0)!;
-      return { itemId: option.id, qty: Math.ceil(required / option.servingsPerPackageUnits) };
-    });
+    const option = items.find((item) => item.servingsPerPackageUnits > 0)!;
+    const lines = [{ itemId: option.id, qty: 1 }];
 
     const put = await call('PUT', `/api/orders/${order.id}/lines`, {
       cookie: customer.cookie,

@@ -117,7 +117,7 @@ export interface CategoryStatus {
 }
 
 export interface ComplianceViolation {
-  kind: 'shortfall' | 'over_cap' | 'over_max' | 'variety';
+  kind: 'empty_order' | 'shortfall' | 'over_cap' | 'over_max' | 'variety';
   categoryKey: string | null;
   /** Machine-readable detail for the override record and the audit log. */
   detail: Record<string, number | string>;
@@ -132,7 +132,7 @@ export interface ComplianceResult {
   overCap: boolean;
   overCapByCents: number;
   violations: ComplianceViolation[];
-  /** FR-18: true only when nothing is short and the cap is respected. */
+  /** True only when the order has food and respects every configured limit. */
   canFinalize: boolean;
 }
 
@@ -220,6 +220,10 @@ export function evaluateOrder(
         contributions,
       };
     });
+
+  if (lines.length === 0) {
+    violations.push({ kind: 'empty_order', categoryKey: null, detail: {} });
+  }
 
   const totalCents = orderTotalCents(lines);
   const cap = snapshot.capTotalCents;

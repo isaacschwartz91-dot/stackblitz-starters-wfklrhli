@@ -85,23 +85,15 @@ async function createCustomer(
   return { accountId, token };
 }
 
-/** Fill an order so it satisfies every category within the cap. */
+/** A maximum-only order qualifies once it contains food and stays below every cap. */
 async function buildCompliantOrder(h: Harness, token: string): Promise<string> {
   const start = await req(h, 'POST', '/api/orders', { token });
   assert.ok(start.status === 201 || start.status === 200, 'order should start');
   const order = bodyOf(start)['order'];
   const orderId = order.id as string;
-  const snapshot = order.rulesSnapshot;
-
   const items = repo.listItems(h.ctx.db, true);
-  const lines: { itemId: string; qty: number }[] = [];
-  for (const cat of snapshot.categories) {
-    const required = snapshot.requiredUnitsByCategory[cat.key] as number;
-    const option = items.find(
-      (i: Item) => i.categoryKey === cat.key && i.servingsPerPackageUnits > 0,
-    )!;
-    lines.push({ itemId: option.id, qty: Math.ceil(required / option.servingsPerPackageUnits) });
-  }
+  const option = items.find((item) => item.servingsPerPackageUnits > 0)!;
+  const lines = [{ itemId: option.id, qty: 1 }];
 
   const put = await req(h, 'PUT', `/api/orders/${orderId}/lines`, { token, body: { lines } });
   assert.equal(put.status, 200, `setting lines failed: ${JSON.stringify(put.body)}`);
@@ -511,7 +503,9 @@ describe('acceptance criterion 3: over the cap needs a recorded override', () =>
     const items = repo.listItems(h.ctx.db, true);
     const order = repo.findOrder(h.ctx.db, orderId)!;
     const lines = order.lines.map((l) => ({ itemId: l.itemId, qty: l.qty }));
-    const pricey = items.reduce((a, b) => (a.priceCents >= b.priceCents ? a : b));
+    const pricey = items
+      .filter((item) => item.servingsPerPackageUnits === 0)
+      .reduce((a, b) => (a.priceCents >= b.priceCents ? a : b));
     lines.push({ itemId: pricey.id, qty: 60 });
     const put = await req(h, 'PUT', `/api/orders/${orderId}/lines`, { token: customer.token, body: { lines } });
     assert.equal(put.status, 200);
@@ -617,6 +611,27 @@ describe('the server does not trust the client', () => {
       });
       assert.equal(response.status, 400, `qty ${qty} must be rejected`);
     }
+  });
+
+  test('a category maximum is enforced while the order is being edited', async () => {
+    const start = await req(h, 'POST', '/api/orders', { token: customer.token });
+    const order = bodyOf(start)['order'];
+    const lineCountBefore = order.lines.length;
+    const fruit = repo.listItems(h.ctx.db, true).find((item) => item.categoryKey === 'fruit')!;
+    const fruitRule = order.rulesSnapshot.requirements.find(
+      (rule: { categoryKey: string }) => rule.categoryKey === 'fruit',
+    );
+    const maximumUnits =
+      fruitRule.maxServingsPerMemberPerDayUnits *
+      order.rulesSnapshot.memberCount *
+      order.rulesSnapshot.daysCovered;
+
+    const response = await req(h, 'PUT', `/api/orders/${order.id}/lines`, {
+      token: customer.token,
+      body: { lines: [{ itemId: fruit.id, qty: Math.floor(maximumUnits / fruit.servingsPerPackageUnits) + 1 }] },
+    });
+    assert.equal(response.status, 422);
+    assert.equal(repo.findOrder(h.ctx.db, order.id)!.lines.length, lineCountBefore);
   });
 
   test('a finalized order cannot be edited afterwards', async () => {
@@ -902,8 +917,8 @@ describe('FR-34 / FR-2: records and profile versioning', () => {
   });
 });
 
-describe('acceptance criterion 1, through the API', () => {
-  test('the seeded profile yields 42/63/63/84 servings and a $285 cap', async () => {
+describe('maximum-only program, through the API', () => {
+  test('the seeded profile yields 42/63/63/84 serving ceilings and a $285 cap', async () => {
     const h = await makeHarness();
     const adminToken = await signIn(h, ADMIN_EMAIL, ADMIN_PASSWORD);
     const customer = await createCustomer(h, adminToken, 'c-ac1@example.test', { memberCount: 3 });
@@ -912,10 +927,20 @@ describe('acceptance criterion 1, through the API', () => {
     const snapshot = bodyOf(start)['order'].rulesSnapshot;
 
     assert.equal(snapshot.capTotalCents, 28500);
-    assert.equal(snapshot.requiredUnitsByCategory.fruit, servingsToUnits(42));
-    assert.equal(snapshot.requiredUnitsByCategory.vegetable, servingsToUnits(63));
-    assert.equal(snapshot.requiredUnitsByCategory.protein, servingsToUnits(63));
-    assert.equal(snapshot.requiredUnitsByCategory.starch, servingsToUnits(84));
+    assert.equal(snapshot.requiredUnitsByCategory.fruit, 0);
+    assert.equal(snapshot.requiredUnitsByCategory.vegetable, 0);
+    assert.equal(snapshot.requiredUnitsByCategory.protein, 0);
+    assert.equal(snapshot.requiredUnitsByCategory.starch, 0);
+    const maximums = Object.fromEntries(
+      snapshot.requirements.map((rule: { categoryKey: string; maxServingsPerMemberPerDayUnits: number }) => [
+        rule.categoryKey,
+        rule.maxServingsPerMemberPerDayUnits * snapshot.memberCount * snapshot.daysCovered,
+      ]),
+    );
+    assert.equal(maximums.fruit, servingsToUnits(42));
+    assert.equal(maximums.vegetable, servingsToUnits(63));
+    assert.equal(maximums.protein, servingsToUnits(63));
+    assert.equal(maximums.starch, servingsToUnits(84));
   });
 });
 

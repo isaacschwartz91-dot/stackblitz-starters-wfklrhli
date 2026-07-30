@@ -12,6 +12,7 @@ import type {
   AccountStatus,
   AuditEvent,
   Category,
+  CategoryRequirement,
   DietaryTag,
   Household,
   Item,
@@ -40,6 +41,38 @@ const json = <T>(v: unknown, fallback: T): T => {
     return fallback;
   }
 };
+
+/**
+ * Profiles created before maximum-only ordering used their only per-day value
+ * as a required minimum. Treat that legacy value as the current ceiling so an
+ * existing local preview adopts the revised program rule without a database
+ * reset. Profiles that already carry an explicit maximum are left unchanged.
+ */
+function normalizeRequirements(requirements: CategoryRequirement[]): CategoryRequirement[] {
+  return requirements.map((requirement) => {
+    if (
+      requirement.maxServingsPerMemberPerDayUnits === null &&
+      requirement.servingsPerMemberPerDayUnits > 0
+    ) {
+      return {
+        ...requirement,
+        servingsPerMemberPerDayUnits: 0,
+        maxServingsPerMemberPerDayUnits: requirement.servingsPerMemberPerDayUnits,
+      };
+    }
+    return requirement;
+  });
+}
+
+function normalizeRulesSnapshot(snapshot: RulesSnapshot): RulesSnapshot {
+  const requirements = normalizeRequirements(snapshot.requirements);
+  const requiredUnitsByCategory: Record<string, number> = {};
+  for (const requirement of requirements) {
+    requiredUnitsByCategory[requirement.categoryKey] =
+      requirement.servingsPerMemberPerDayUnits * snapshot.memberCount * snapshot.daysCovered;
+  }
+  return { ...snapshot, requirements, requiredUnitsByCategory };
+}
 
 // --- accounts -------------------------------------------------------------
 
@@ -177,7 +210,7 @@ export function rowToProfile(row: Row): ProgramProfile {
     daysCovered: num(row['days_covered']),
     capAmountCents: num(row['cap_amount_cents']),
     capBasis: str(row['cap_basis'], 'per_member') as ProgramProfile['capBasis'],
-    requirements: json(row['requirements_json'], []),
+    requirements: normalizeRequirements(json(row['requirements_json'], [])),
     mealSplits: json(row['meal_splits_json'], []),
     allowNonCreditableItems: bool(row['allow_non_creditable']),
     shelfLifeHorizonDays: json(row['shelf_life_horizons_json'], {} as Record<ShelfLifeClass, number | null>),
@@ -358,11 +391,12 @@ export function upsertHousehold(db: Db, household: Household): void {
 // --- orders ---------------------------------------------------------------
 
 export function rowToOrder(row: Row): Order {
+  const snapshot = normalizeRulesSnapshot(json(row['rules_snapshot_json'], {} as RulesSnapshot));
   return {
     id: str(row['id']),
     householdId: str(row['household_id']),
     status: str(row['status'], 'draft') as Order['status'],
-    rulesSnapshot: json(row['rules_snapshot_json'], {} as RulesSnapshot),
+    rulesSnapshot: snapshot,
     lines: json<OrderLine[]>(row['lines_json'], []),
     createdAt: str(row['created_at']),
     updatedAt: str(row['updated_at']),

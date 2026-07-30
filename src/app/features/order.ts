@@ -979,13 +979,14 @@ import type { CategoryStatus, Suggestion } from '../../shared/compliance/engine'
                     step="1"
                     inputmode="numeric"
                     [value]="qtyOf(item.id)"
+                    [attr.max]="quantityLimit(item)"
                     [disabled]="readOnly()"
                     (change)="updateQuantity(item, $any($event.target).value)"
                   />
                   <button
                     type="button"
                     [attr.aria-label]="t()('add') + ' ' + item.name"
-                    [disabled]="readOnly()"
+                    [disabled]="readOnly() || !canIncreaseQuantity(item)"
                     (click)="bump(item, 1)"
                   >
                     +
@@ -1065,7 +1066,7 @@ import type { CategoryStatus, Suggestion } from '../../shared/compliance/engine'
           >
             <span>{{ t()('viewProgress') }}</span>
             <span class="rail-handle-summary">
-              {{ completedCategoryCount() }}/{{ categoryCount() }} {{ t()('categoriesMet') }}
+              {{ categoriesUsedCount() }}/{{ categoryCount() }} {{ t()('categoriesMet') }}
             </span>
             <span aria-hidden="true">{{ collapsed() ? '▴' : '▾' }}</span>
           </button>
@@ -1074,7 +1075,7 @@ import type { CategoryStatus, Suggestion } from '../../shared/compliance/engine'
             <div class="rail-summary">
               <span class="eyebrow">{{ t()('progress') }}</span>
               <div class="rail-progress">
-                <b>{{ completedCategoryCount() }}/{{ categoryCount() }}</b>
+                <b>{{ categoriesUsedCount() }}/{{ categoryCount() }}</b>
                 <span>{{ t()('categoriesMet') }}</span>
               </div>
             </div>
@@ -1092,36 +1093,31 @@ import type { CategoryStatus, Suggestion } from '../../shared/compliance/engine'
                     <span class="meter-name">{{ cat.label }}</span>
                     <span class="meter-val num">
                       <b>{{ servings(cat.inCartUnits) }}</b> {{ t()('of') }}
-                      {{ servings(cat.requiredUnits) }}
+                      {{ servings(categoryMaximum(cat)) }}
                     </span>
                   </div>
                   <div
                     class="track"
                     role="meter"
                     aria-valuemin="0"
-                    [attr.aria-valuemax]="cat.requiredUnits"
+                    [attr.aria-valuemax]="categoryMaximum(cat)"
                     [attr.aria-valuenow]="cat.inCartUnits"
                     [attr.aria-label]="meterLabel(cat)"
                   >
                     <div
                       class="fill"
-                      [class.short]="cat.shortfallUnits > 0"
                       [class.over]="cat.overMax"
                       [style.width.%]="percent(cat)"
                     ></div>
                   </div>
 
                   <!-- NFR-14: the status is text, not just a coloured bar -->
-                  @if (cat.shortfallUnits > 0) {
-                    <span class="chip short">
-                      {{ t()('shortBy') }} {{ servings(cat.shortfallUnits) }}
-                    </span>
-                  } @else if (cat.overMax) {
+                  @if (cat.overMax) {
                     <span class="chip over">{{ t()('overMaximum') }}</span>
-                  } @else if (cat.surplusUnits > 0) {
+                  } @else if (cat.inCartUnits > 0) {
                     <span class="chip ok">{{ t()('overMinimum') }}</span>
                   } @else {
-                    <span class="chip ok">{{ t()('met') }}</span>
+                    <span class="chip muted">{{ t()('available') }}</span>
                   }
                   @if (cat.varietyShortfall > 0) {
                     <span class="chip short" style="margin-left:6px">
@@ -1394,6 +1390,9 @@ export class OrderComponent {
             category.shortfallUnits === 0 && !category.overMax && category.varietyShortfall === 0,
         ).length ?? 0,
   );
+  protected readonly categoriesUsedCount = computed(
+    () => this.state.compliance()?.categories.filter((category) => category.inCartUnits > 0).length ?? 0,
+  );
   protected readonly orderStage = computed<'choose' | 'check' | 'finish'>(() => {
     const result = this.state.compliance();
     if (result?.canFinalize) return 'finish';
@@ -1439,8 +1438,9 @@ export class OrderComponent {
   }
 
   protected percent(cat: CategoryStatus): number {
-    if (cat.requiredUnits <= 0) return 100;
-    return Math.min(100, Math.round((cat.inCartUnits / cat.requiredUnits) * 100));
+    const maximum = this.categoryMaximum(cat);
+    if (maximum <= 0) return 0;
+    return Math.min(100, Math.round((cat.inCartUnits / maximum) * 100));
   }
 
   protected budgetPercent(total: number, cap: number): number {
@@ -1452,10 +1452,13 @@ export class OrderComponent {
   protected meterLabel(cat: CategoryStatus): string {
     const t = this.t();
     const base = `${cat.label}: ${formatUnits(cat.inCartUnits)} ${t('of')} ${formatUnits(
-      cat.requiredUnits,
+      this.categoryMaximum(cat),
     )} ${t('servings')}`;
-    if (cat.shortfallUnits > 0) return `${base}, ${t('shortBy')} ${formatUnits(cat.shortfallUnits)}`;
-    return `${base}, ${t('met')}`;
+    return cat.overMax ? `${base}, ${t('overMaximum')}` : `${base}, ${t('overMinimum')}`;
+  }
+
+  protected categoryMaximum(cat: CategoryStatus): number {
+    return cat.maxUnits ?? cat.requiredUnits;
   }
 
   protected budgetLabel(total: number, cap: number): string {
@@ -1476,14 +1479,39 @@ export class OrderComponent {
   }
 
   protected bump(item: Item, delta: number): void {
-    void this.state.setQuantity(item.id, Math.max(0, this.qtyOf(item.id) + delta));
+    const maximum = this.quantityLimit(item);
+    const next = Math.max(0, this.qtyOf(item.id) + delta);
+    void this.state.setQuantity(item.id, maximum === null ? next : Math.min(next, maximum));
   }
 
   /** Commit a typed whole-package quantity when the field is changed or blurred. */
   protected updateQuantity(item: Item, rawQuantity: string): void {
     const quantity = Number(rawQuantity);
     if (!Number.isFinite(quantity)) return;
-    void this.state.setQuantity(item.id, Math.max(0, Math.floor(quantity)));
+    const maximum = this.quantityLimit(item);
+    const wholePackages = Math.max(0, Math.floor(quantity));
+    void this.state.setQuantity(
+      item.id,
+      maximum === null ? wholePackages : Math.min(wholePackages, maximum),
+    );
+  }
+
+  /** Whole packages that still fit below this item's category ceiling. */
+  protected quantityLimit(item: Item): number | null {
+    if (item.servingsPerPackageUnits <= 0) return null;
+    const category = this.state
+      .compliance()
+      ?.categories.find((candidate) => candidate.categoryKey === item.categoryKey);
+    if (!category || category.maxUnits === null) return null;
+
+    const unitsFromOtherItems =
+      category.inCartUnits - this.qtyOf(item.id) * item.servingsPerPackageUnits;
+    return Math.max(0, Math.floor((category.maxUnits - unitsFromOtherItems) / item.servingsPerPackageUnits));
+  }
+
+  protected canIncreaseQuantity(item: Item): boolean {
+    const maximum = this.quantityLimit(item);
+    return maximum === null || this.qtyOf(item.id) < maximum;
   }
 
   protected addSuggestion(itemId: string, qty: number): void {

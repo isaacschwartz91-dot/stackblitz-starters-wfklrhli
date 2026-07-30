@@ -245,6 +245,31 @@ describe('FR-22: optional maximums and variety rules (DECIDE, default off)', () 
   });
 });
 
+describe('maximum-only category rules', () => {
+  const snapshot = makeSnapshot({
+    perMemberPerDay: { fruit: 0, vegetable: 0, protein: 0, starch: 0 },
+    maxPerMemberPerDay: { fruit: 2, vegetable: 3, protein: 3, starch: 4 },
+  });
+  const catalog = makeCatalog();
+
+  test('an order can finalize below each category maximum, but not when empty', () => {
+    assert.equal(evaluateOrder([], snapshot).canFinalize, false);
+
+    const apples = catalog.find((item) => item.id === 'fruit-0')!;
+    const result = evaluateOrder([makeLine(apples, 1)], snapshot);
+    assert.equal(result.canFinalize, true);
+    assert.equal(result.categories.find((category) => category.categoryKey === 'vegetable')!.shortfallUnits, 0);
+  });
+
+  test('a category above its maximum cannot finalize', () => {
+    const apples = catalog.find((item) => item.id === 'fruit-0')!;
+    const result = evaluateOrder([makeLine(apples, 8)], snapshot);
+    const fruit = result.categories.find((category) => category.categoryKey === 'fruit')!;
+    assert.equal(fruit.overMax, true);
+    assert.equal(result.canFinalize, false);
+  });
+});
+
 describe('acceptance criterion 2: suggestions close a shortfall (FR-16)', () => {
   const snapshot = makeSnapshot();
   const catalog = makeCatalog();
