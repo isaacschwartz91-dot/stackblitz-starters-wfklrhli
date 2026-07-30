@@ -191,15 +191,26 @@ import type { CategoryStatus, Suggestion } from '../../shared/compliance/engine'
         font-size: 18px;
         font-weight: 700;
       }
-      .qty output {
+      .qty input {
         flex: 1;
-        display: grid;
-        place-items: center;
         min-width: 44px;
+        width: 100%;
+        border: 0;
+        border-radius: 0;
+        appearance: textfield;
+        text-align: center;
         font-family: var(--mono);
         font-size: 15px;
         font-weight: 700;
         background: var(--surface);
+      }
+      .qty input::-webkit-inner-spin-button,
+      .qty input::-webkit-outer-spin-button {
+        appearance: none;
+        margin: 0;
+      }
+      .qty input:focus-visible {
+        outline-offset: -2px;
       }
 
       .meter {
@@ -619,6 +630,66 @@ import type { CategoryStatus, Suggestion } from '../../shared/compliance/engine'
           font-size: 14px;
         }
       }
+      @media (max-width: 600px) {
+        .main {
+          padding: 16px 14px 96px;
+        }
+        .order-intro,
+        .pre-order-hero {
+          padding: 18px;
+        }
+        .order-title {
+          font-size: 30px;
+        }
+        .toolbar {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) auto;
+          gap: 8px;
+        }
+        .toolbar .input {
+          min-width: 0;
+        }
+        .toolbar .btn {
+          padding: 0 12px;
+        }
+        .filters {
+          flex-wrap: nowrap;
+          overflow-x: auto;
+          padding-bottom: 4px;
+          scrollbar-width: thin;
+        }
+        .filters button {
+          flex: 0 0 auto;
+        }
+        .grid {
+          grid-template-columns: 1fr;
+          gap: 10px;
+        }
+        .tile {
+          gap: 9px;
+          padding: 14px;
+        }
+        .tile:hover {
+          transform: none;
+        }
+        .tile-name {
+          font-size: 16px;
+        }
+        .qty button {
+          width: 52px;
+        }
+        .qty input {
+          font-size: 16px;
+        }
+        .cart-section {
+          margin-top: 26px;
+          padding-top: 20px;
+        }
+        .rail {
+          max-height: min(72dvh, 620px);
+          padding: 10px 14px 16px;
+        }
+      }
     `,
   ],
   template: `
@@ -869,7 +940,7 @@ import type { CategoryStatus, Suggestion } from '../../shared/compliance/engine'
                   @if (item.servingsPerPackageUnits === 0) {
                     <span class="tag">{{ t()('noServings') }}</span>
                   }
-                  @for (tag of item.tags.slice(0, 2); track tag) {
+                  @for (tag of visibleTags(item); track tag) {
                     <span class="tag">{{ tag }}</span>
                   }
                 </div>
@@ -897,7 +968,20 @@ import type { CategoryStatus, Suggestion } from '../../shared/compliance/engine'
                   >
                     −
                   </button>
-                  <output [attr.aria-label]="t()('qty') + ' ' + item.name">{{ qtyOf(item.id) }}</output>
+                  <label class="sr-only" [for]="'qty-' + item.id">
+                    {{ t()('qty') }} {{ i18n.localized(item.name, item.nameEs) }}
+                  </label>
+                  <input
+                    [id]="'qty-' + item.id"
+                    class="num"
+                    type="number"
+                    min="0"
+                    step="1"
+                    inputmode="numeric"
+                    [value]="qtyOf(item.id)"
+                    [disabled]="readOnly()"
+                    (change)="updateQuantity(item, $any($event.target).value)"
+                  />
                   <button
                     type="button"
                     [attr.aria-label]="t()('add') + ' ' + item.name"
@@ -1345,6 +1429,11 @@ export class OrderComponent {
     return this.state.conflictsFor(item);
   }
 
+  /** Keep the shopping cards focused on ordering; dietary flags remain enforced in the rules. */
+  protected visibleTags(item: Item): DietaryTag[] {
+    return item.tags.filter((tag) => tag !== 'halal' && tag !== 'kosher').slice(0, 2);
+  }
+
   protected qtyOf(itemId: string): number {
     return this.state.order()?.lines.find((l) => l.itemId === itemId)?.qty ?? 0;
   }
@@ -1388,6 +1477,13 @@ export class OrderComponent {
 
   protected bump(item: Item, delta: number): void {
     void this.state.setQuantity(item.id, Math.max(0, this.qtyOf(item.id) + delta));
+  }
+
+  /** Commit a typed whole-package quantity when the field is changed or blurred. */
+  protected updateQuantity(item: Item, rawQuantity: string): void {
+    const quantity = Number(rawQuantity);
+    if (!Number.isFinite(quantity)) return;
+    void this.state.setQuantity(item.id, Math.max(0, Math.floor(quantity)));
   }
 
   protected addSuggestion(itemId: string, qty: number): void {
