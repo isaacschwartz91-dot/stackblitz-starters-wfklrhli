@@ -10,7 +10,7 @@
  * exactly (FR-35).
  */
 
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 
 import { AppState } from '../core/state';
 import { I18nService } from '../core/i18n';
@@ -177,6 +177,208 @@ import type { MealKey, Order } from '../../shared/types';
       .customer-sheet .day-name {
         font-size: 15pt;
       }
+
+      /* Everyday, screen-first meal planning -------------------------------- */
+      .main {
+        max-width: 1120px;
+        padding: 32px clamp(20px, 4vw, 52px) 48px;
+      }
+      .plan-hero {
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background:
+          radial-gradient(circle at 100% 0, var(--spruce-soft) 0, transparent 42%),
+          var(--surface);
+        padding: clamp(20px, 4vw, 34px);
+        margin-bottom: 22px;
+      }
+      .eyebrow {
+        display: block;
+        color: var(--spruce);
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        margin-bottom: 8px;
+      }
+      .plan-title {
+        font-family: var(--serif);
+        font-size: clamp(28px, 3vw, 38px);
+        line-height: 1.08;
+        letter-spacing: -0.025em;
+        margin: 0;
+        max-width: 20ch;
+      }
+      .plan-lede {
+        color: var(--ink-2);
+        font-size: 16px;
+        line-height: 1.55;
+        margin: 10px 0 0;
+        max-width: 60ch;
+      }
+      .plan-metrics {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px 24px;
+        border-top: 1px solid var(--line);
+        margin-top: 22px;
+        padding-top: 17px;
+      }
+      .plan-metric {
+        display: flex;
+        align-items: baseline;
+        gap: 6px;
+        color: var(--ink-2);
+        font-size: 12px;
+      }
+      .plan-metric b {
+        color: var(--ink);
+        font-family: var(--mono);
+        font-size: 19px;
+      }
+      .plan-hero .toolbar {
+        margin: 20px 0 0;
+      }
+      .day-navigator {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        overflow-x: auto;
+        padding: 2px 0 8px;
+        margin: 4px 0 14px;
+        scrollbar-width: thin;
+      }
+      .day-navigator button {
+        background: var(--surface);
+        border: 1px solid var(--line-2);
+        border-radius: 999px;
+        color: var(--ink-2);
+        flex: 0 0 auto;
+        min-height: 40px;
+        padding: 0 14px;
+        font-size: 12px;
+        font-weight: 700;
+      }
+      .day-navigator button[aria-pressed='true'] {
+        background: var(--spruce);
+        border-color: var(--spruce);
+        color: var(--spruce-ink);
+      }
+      .focus-day {
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: var(--surface);
+        overflow: hidden;
+        box-shadow: 0 8px 24px rgb(20 32 28 / 6%);
+      }
+      .focus-day-head {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 16px;
+        background: var(--surface-2);
+        border-bottom: 1px solid var(--line);
+        padding: 18px 20px;
+      }
+      .focus-day-head h2 {
+        font-family: var(--serif);
+        font-size: 24px;
+        margin: 0;
+      }
+      .focus-day-head p {
+        color: var(--ink-3);
+        font-size: 13px;
+        margin: 3px 0 0;
+      }
+      .focus-meals {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+      .focus-meal {
+        border-right: 1px solid var(--line);
+        min-height: 190px;
+        padding: 18px;
+      }
+      .focus-meal:last-child {
+        border-right: 0;
+      }
+      .focus-meal h3 {
+        color: var(--spruce);
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.1em;
+        margin: 0 0 14px;
+        text-transform: uppercase;
+      }
+      .focus-meal ul {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      .focus-meal li {
+        align-items: baseline;
+        display: flex;
+        font-size: 14px;
+        gap: 9px;
+        justify-content: space-between;
+      }
+      .focus-meal .amt {
+        color: var(--ink-3);
+        flex: 0 0 auto;
+      }
+      .focus-meal li.short {
+        color: var(--ochre);
+        display: block;
+        font-weight: 700;
+      }
+      .all-days-toggle {
+        margin-top: 14px;
+      }
+      .all-days {
+        border-top: 1px solid var(--line);
+        margin-top: 28px;
+        padding-top: 22px;
+      }
+      .all-days h2 {
+        font-family: var(--serif);
+        font-size: 21px;
+        margin: 0 0 12px;
+      }
+      .all-days .day {
+        border-radius: 12px;
+      }
+      @media (max-width: 700px) {
+        .main {
+          padding: 22px 18px 36px;
+        }
+        .plan-hero {
+          border-radius: 14px;
+          padding: 20px;
+        }
+        .focus-day {
+          border-radius: 14px;
+        }
+        .focus-day-head {
+          align-items: flex-start;
+          flex-direction: column;
+          padding: 16px;
+        }
+        .focus-meals {
+          grid-template-columns: 1fr;
+        }
+        .focus-meal {
+          border-bottom: 1px solid var(--line);
+          border-right: 0;
+          min-height: 0;
+          padding: 16px;
+        }
+        .focus-meal:last-child {
+          border-bottom: 0;
+        }
+      }
     `,
   ],
   template: `
@@ -185,19 +387,29 @@ import type { MealKey, Order } from '../../shared/types';
         <h1 class="page">{{ t()('mealPlan') }}</h1>
         <p class="sec-note">{{ t()('noPlanYet') }}</p>
       } @else {
-        <h1 class="page no-print">{{ t()('mealPlan') }}</h1>
-        <p class="sec-note no-print">{{ t()('mealPlanHint') }}</p>
+        <section class="plan-hero no-print" aria-labelledby="plan-title">
+          <span class="eyebrow">{{ t()('mealPlan') }}</span>
+          <h1 class="plan-title" id="plan-title">{{ t()('planOverview') }}</h1>
+          <p class="plan-lede">{{ t()('planReady') }}</p>
 
-        <div class="toolbar no-print">
-          <button class="btn" type="button" (click)="state.generatePlan()" [disabled]="state.busy()">
-            {{ plan() ? t()('regenerate') : t()('generatePlan') }}
-          </button>
-          @if (plan()) {
-            <button class="btn neutral" type="button" (click)="print()">
-              {{ t()('print') }}
-            </button>
+          @if (plan(); as p) {
+            <div class="plan-metrics" aria-live="polite">
+              <span class="plan-metric"><b>{{ p.days.length }}</b> {{ t()('days') }}</span>
+              <span class="plan-metric"><b>{{ plannedMealCount() }}</b> {{ t()('mealsPlanned') }}</span>
+            </div>
           }
-        </div>
+
+          <div class="toolbar">
+            <button class="btn" type="button" (click)="state.generatePlan()" [disabled]="state.busy()">
+              {{ plan() ? t()('regenerate') : t()('generatePlan') }}
+            </button>
+            @if (plan()) {
+              <button class="btn neutral" type="button" (click)="print()">
+                {{ t()('print') }}
+              </button>
+            }
+          </div>
+        </section>
 
         @if (state.planIsStale()) {
           <div class="note warn no-print" style="margin-bottom:14px">{{ t()('planStale') }}</div>
@@ -233,8 +445,106 @@ import type { MealKey, Order } from '../../shared/types';
             </div>
           }
 
+          <section class="plan-focus no-print" aria-labelledby="selected-day-title">
+            <div class="day-navigator" role="group" [attr.aria-label]="t()('selectDay')">
+              @for (day of p.days; track day.dayIndex) {
+                <button
+                  type="button"
+                  [attr.aria-pressed]="selectedDayIndex() === day.dayIndex"
+                  (click)="selectDay(day.dayIndex)"
+                >
+                  {{ t()('day') }} {{ day.dayIndex + 1 }}
+                </button>
+              }
+            </div>
+
+            @if (selectedDay(); as day) {
+              <article class="focus-day">
+                <div class="focus-day-head">
+                  <div>
+                    <span class="eyebrow">{{ t()('planForDay') }}</span>
+                    <h2 id="selected-day-title">{{ t()('day') }} {{ day.dayIndex + 1 }}</h2>
+                  </div>
+                  <p>{{ formatDate(day.date) }}</p>
+                </div>
+                <div class="focus-meals">
+                  @for (meal of day.meals; track meal.meal) {
+                    <section class="focus-meal">
+                      <h3>{{ mealLabel(meal.meal) }}</h3>
+                      <ul>
+                        @for (entry of meal.items; track entry.itemId) {
+                          <li>
+                            <span>
+                              @if (isEarly(entry.itemId)) {
+                                <span class="early" aria-hidden="true">●</span>
+                              }
+                              {{ i18n.localized(entry.itemName, entry.itemNameEs) }}
+                            </span>
+                            <span class="amt num">{{ servings(entry.units) }}</span>
+                          </li>
+                        }
+                        @for (short of meal.shortfalls; track short.categoryKey) {
+                          <li class="short">
+                            {{ t()('mealShort') }} — {{ categoryLabel(short.categoryKey) }}
+                            <span class="num">{{ servings(short.units) }}</span>
+                          </li>
+                        }
+                      </ul>
+                    </section>
+                  }
+                </div>
+              </article>
+            }
+
+            <button class="btn ghost small all-days-toggle" type="button" (click)="toggleAllDays()">
+              {{ showAllDays() ? t()('hideAllDays') : t()('viewAllDays') }}
+            </button>
+          </section>
+
+          @if (showAllDays()) {
+            <section class="all-days no-print" aria-labelledby="all-days-title">
+              <h2 id="all-days-title">{{ t()('allDays') }}</h2>
+              <div class="days">
+                @for (day of p.days; track day.dayIndex) {
+                  <article class="day">
+                    <div class="day-head">
+                      <span class="day-name">{{ t()('day') }} {{ day.dayIndex + 1 }}</span>
+                      <span class="day-date">{{ formatDate(day.date) }}</span>
+                    </div>
+                    <div class="meals">
+                      @for (meal of day.meals; track meal.meal) {
+                        <div class="meal">
+                          <h4>{{ mealLabel(meal.meal) }}</h4>
+                          <ul>
+                            @for (entry of meal.items; track entry.itemId) {
+                              <li>
+                                <span>
+                                  @if (isEarly(entry.itemId)) {
+                                    <span class="early" aria-hidden="true">●</span>
+                                  }
+                                  {{ i18n.localized(entry.itemName, entry.itemNameEs) }}
+                                </span>
+                                <span class="amt num">{{ servings(entry.units) }}</span>
+                              </li>
+                            }
+                            @for (short of meal.shortfalls; track short.categoryKey) {
+                              <li class="short">
+                                {{ t()('mealShort') }} — {{ categoryLabel(short.categoryKey) }}
+                                <span class="num">{{ servings(short.units) }}</span>
+                              </li>
+                            }
+                          </ul>
+                        </div>
+                      }
+                    </div>
+                  </article>
+                }
+              </div>
+            </section>
+          }
+
           <!-- ---- customer sheet (FR-32) ---- -->
-          <section class="sheet customer-sheet">
+          <section class="sheet customer-sheet print-only">
             <h1>{{ t()('customerSheet') }}</h1>
             <p class="sub">
               {{ t()('referralId') }}: <span class="num">{{ referralId() }}</span> ·
@@ -423,6 +733,17 @@ export class PlanComponent {
 
   protected readonly order = this.state.order;
   protected readonly plan = this.state.plan;
+  protected readonly selectedDayIndex = signal(0);
+  protected readonly showAllDays = signal(false);
+
+  protected readonly selectedDay = computed(() => {
+    const days = this.plan()?.days ?? [];
+    return days.find((day) => day.dayIndex === this.selectedDayIndex()) ?? days[0] ?? null;
+  });
+
+  protected readonly plannedMealCount = computed(
+    () => this.plan()?.days.reduce((total, day) => total + day.meals.length, 0) ?? 0,
+  );
 
   protected readonly snapshot = computed(
     () => (this.order() as Order).rulesSnapshot,
@@ -456,6 +777,14 @@ export class PlanComponent {
 
   protected mealLabel(meal: MealKey): string {
     return this.t()(meal);
+  }
+
+  protected selectDay(dayIndex: number): void {
+    this.selectedDayIndex.set(dayIndex);
+  }
+
+  protected toggleAllDays(): void {
+    this.showAllDays.update((shown) => !shown);
   }
 
   /** FR-27: mark the perishables so the customer eats them first. */

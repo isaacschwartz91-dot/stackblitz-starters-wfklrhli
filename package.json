@@ -12,7 +12,8 @@
     "build:client": "ng build",
     "test:e2e": "node tools/smoke.mjs",
     "start:dev": "ng serve",
-    "local": "npm run build:client && npm start"
+    "local": "npm run build:client && npm start",
+    "preview": "npm run local"
   },
   "dependencies": {
     "@angular/common": "^21.1.0",
