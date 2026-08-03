@@ -1,0 +1,29 @@
+=== Example 1 — phoned in, typed up by staff ===
+2 milk
+dozen eggs
+3 lb apples
+rye bread
+pnut butter
+bananas
+
+=== Example 2 — forwarded email, pasted whole ===
+From: sarah.klein@example.com
+Subject: Thursday delivery
+
+Hi — usual order please:
+- 1 gal whole milk
+- 2 loaves whole wheat
+- 1 lb butter (unsalted)
+- orange juice, no pulp
+- 2 bags baby carrots
+- ice cream
+Thanks!
+
+=== Example 3 — typed in a hurry, typos on purpose ===
+coffee x2
+tomatos 2 lb
+chedar cheese
+spagetti
+marinara
+paper towles
+zucchini

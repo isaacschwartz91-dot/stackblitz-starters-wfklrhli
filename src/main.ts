@@ -1,21 +1,25 @@
-import { Component, signal } from '@angular/core';
+import { provideZonelessChangeDetection } from '@angular/core';
 import { bootstrapApplication } from '@angular/platform-browser';
+import { provideRouter, withInMemoryScrolling } from '@angular/router';
 
-@Component({
-  selector: 'app-root',
-  template: `
-    <h1>Hello from {{ name }}!</h1>
-    <a target="_blank" href="https://angular.dev/overview">
-      Learn more about Angular
-    </a>
-    <button (click)="counter.set(counter() - 1)">--</button>
-    <span> Counter: {{ counter() }} </span>
-    <button (click)="counter.set(counter() + 1)">++</button>
-  `,
+import { App } from './app/app';
+import { routes } from './app/routes';
+import { AuthService } from './app/core/auth.service';
+import { DataService } from './app/core/data.service';
+
+bootstrapApplication(App, {
+  providers: [
+    provideZonelessChangeDetection(),
+    provideRouter(routes, withInMemoryScrolling({ scrollPositionRestoration: 'top' })),
+  ],
 })
-export class App {
-  name = 'Angular';
-  counter = signal(0);
-}
-
-bootstrapApplication(App);
+  .then(async (app) => {
+    // Pull the store into memory before anything asks to match an order.
+    const data = app.injector.get(DataService);
+    const auth = app.injector.get(AuthService);
+    await data.load();
+    await auth.restore();
+  })
+  .catch((error: unknown) => {
+    console.error(error);
+  });

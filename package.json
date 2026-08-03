@@ -1,10 +1,12 @@
 {
-  "name": "angular-starter",
+  "name": "grocery-order-picking",
   "private": true,
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
-    "build": "ng build"
+    "build": "ng build",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@angular/common": "^21.1.0",
@@ -14,12 +16,15 @@
     "@angular/platform-browser": "^21.1.0",
     "@angular/router": "^21.1.0",
     "rxjs": "^7.8.1",
-    "tslib": "^2.5.0"
+    "tslib": "^2.5.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@angular/build": "^21.1.0",
     "@angular/cli": "^21.1.0",
     "@angular/compiler-cli": "^21.1.0",
-    "typescript": "^5.9.3"
-  }
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.10"
+  },
+  "description": "Re-sorts a grocery order into shelf walking order, and learns each customer's shorthand."
 }
