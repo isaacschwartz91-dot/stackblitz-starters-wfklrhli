@@ -255,8 +255,14 @@ export class SheetImport {
   /** Things worth knowing that do not stop the import. */
   protected planWarning(plan: SheetPlan): string | null {
     if (plan.role !== 'items' || this.planProblem(plan) !== null) return null;
-    if (!plan.mapping.includes('aisle')) {
-      return 'No aisle column — these products will land in "Location unknown" until one is set.';
+    const hasAisle = plan.mapping.includes('aisle');
+
+    if (!hasAisle && plan.rowOrderIsWalkingOrder) {
+      // A complete walk, just without headings. Perfectly usable.
+      return 'No aisle column, so the pick list will be one continuous run in this exact row order. Map a section or department column if you would rather have aisle headings.';
+    }
+    if (!hasAisle) {
+      return 'No aisle column — these products will land in "Location unknown" until one is set. If these rows are already in shelf order, tick the box above instead.';
     }
     if (!plan.mapping.includes('shelf_sequence') && !plan.rowOrderIsWalkingOrder) {
       return 'No shelf sequence column — within each aisle, items will sort by name.';

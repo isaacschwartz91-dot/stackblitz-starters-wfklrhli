@@ -65,8 +65,14 @@ export class DataService {
     return [...missing].sort();
   });
 
+  /**
+   * Products with no position at all. An item with no aisle but a shelf
+   * sequence still has a place in the walk, so it does not count.
+   */
   readonly itemsWithoutLocation = computed(
-    () => this.items().filter((item) => aisleKey(item.aisle) === '').length,
+    () =>
+      this.items().filter((item) => aisleKey(item.aisle) === '' && item.shelfSequence === null)
+        .length,
   );
 
   get backend(): Backend {

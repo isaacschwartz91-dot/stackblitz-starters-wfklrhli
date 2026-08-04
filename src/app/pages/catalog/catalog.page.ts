@@ -127,6 +127,8 @@ const PAGE_SIZE = 60;
                   <td class="small">
                     @if (item.aisle) {
                       {{ aisleName(item.aisle) }}
+                    } @else if (item.shelfSequence !== null) {
+                      <span class="chip">shelf order</span>
                     } @else {
                       <span class="chip warn">none</span>
                     }

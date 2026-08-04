@@ -12,6 +12,16 @@ import type { Aisle, Item, OrderLine } from '../core/models';
 
 export const UNKNOWN_AISLE_ID = '__unknown__';
 
+/**
+ * Items with no aisle but a known shelf position.
+ *
+ * A store can hand over one sheet listing every product in the exact order it
+ * sits on the shelf, with no aisle column at all. That is a complete walking
+ * order — it just has no headings — so it gets its own group rather than being
+ * lumped in with products whose location nobody knows.
+ */
+export const SHELF_ORDER_AISLE_ID = '__shelf_order__';
+
 export interface PickEntry {
   line: OrderLine;
   item: Item | null;
@@ -69,6 +79,25 @@ function sequenceFor(aisle: string, order: Map<string, number>): number {
   return UNKNOWN_BASE + (Number.isFinite(numeric) && numeric > 0 ? numeric : UNKNOWN_BASE);
 }
 
+function groupNameFor(
+  groupId: string,
+  item: Item,
+  aisleNames: Map<string, string>,
+  key: string,
+): string {
+  if (groupId === SHELF_ORDER_AISLE_ID) return 'In shelf order';
+  if (groupId === UNKNOWN_AISLE_ID) return 'Location unknown — fix me';
+  return aisleNames.get(key) ?? `Aisle ${item.aisle}`;
+}
+
+function groupSequenceFor(groupId: string, aisle: string, order: Map<string, number>): number {
+  // Un-aisled but sequenced items follow every named aisle; genuinely
+  // unlocated ones always come dead last.
+  if (groupId === SHELF_ORDER_AISLE_ID) return Number.MAX_SAFE_INTEGER - 1;
+  if (groupId === UNKNOWN_AISLE_ID) return Number.MAX_SAFE_INTEGER;
+  return sequenceFor(aisle, order);
+}
+
 export interface BuildPickListInput {
   lines: OrderLine[];
   items: Map<string, Item>;
@@ -105,16 +134,19 @@ export function buildPickList({ lines, items, aisles }: BuildPickListInput): Pic
     // Picking follows the shelf the *substitute* sits on when there is one.
     const located = substitute ?? item;
     const key = aisleKey(located.aisle);
-    const groupId = key === '' ? UNKNOWN_AISLE_ID : key;
+    const groupId =
+      key !== ''
+        ? key
+        : located.shelfSequence !== null
+          ? SHELF_ORDER_AISLE_ID
+          : UNKNOWN_AISLE_ID;
+
     let group = groups.get(groupId);
     if (group === undefined) {
       group = {
         aisleId: groupId,
-        aisleName:
-          groupId === UNKNOWN_AISLE_ID
-            ? 'Location unknown — fix me'
-            : (aisleNames.get(key) ?? `Aisle ${located.aisle}`),
-        sequence: groupId === UNKNOWN_AISLE_ID ? Number.MAX_SAFE_INTEGER : sequenceFor(located.aisle, order),
+        aisleName: groupNameFor(groupId, located, aisleNames, key),
+        sequence: groupSequenceFor(groupId, located.aisle, order),
         entries: [],
       };
       groups.set(groupId, group);

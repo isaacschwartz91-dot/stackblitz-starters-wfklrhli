@@ -160,16 +160,10 @@ import { ItemPicker } from '../../ui/item-picker';
                 <div class="what">
                   <div class="name">{{ displayItem(entry)?.name }}</div>
                   <div class="small dim">
-                    {{ detail(displayItem(entry)) }}
                     @if (entry.substitute !== null) {
-                      · <span class="chip warn">substituted for {{ entry.item?.name }}</span>
+                      <span class="chip warn">substituted for {{ entry.item?.name }}</span>
                     }
-                    @if (entry.line.note) {
-                      · note: {{ entry.line.note }}
-                    }
-                    @if (entry.line.rawText && entry.line.rawText !== displayItem(entry)?.name) {
-                      · they said “{{ entry.line.rawText }}”
-                    }
+                    {{ subtitle(entry) }}
                   </div>
                 </div>
                 <div class="side no-print">
@@ -270,6 +264,23 @@ export class PickListPage {
 
   protected detail(item: Item | null): string {
     return item === null ? '' : itemDetail(item);
+  }
+
+  /**
+   * The grey line under a product: its brand and size, the customer's note,
+   * and their own wording when it differs from the product name. Built here so
+   * the separators never dangle when a part is missing.
+   */
+  protected subtitle(entry: PickEntry): string {
+    const item = this.displayItem(entry);
+    const parts: string[] = [];
+    const detail = this.detail(item);
+    if (detail !== '') parts.push(detail);
+    if (entry.line.note !== '') parts.push(`note: ${entry.line.note}`);
+    if (entry.line.rawText !== '' && entry.line.rawText !== item?.name) {
+      parts.push(`they said \u201C${entry.line.rawText}\u201D`);
+    }
+    return parts.join(' · ');
   }
 
   protected itemName(itemId: string | null): string {

@@ -444,6 +444,70 @@ describe('buildPickList', () => {
     expect(pickList.estimatedTotal).toBe(3 * 1.99 + 2 * 3.49);
   });
 
+  it('treats a shelf-order sheet with no aisles as a real walk, not a problem', () => {
+    // One sheet, every product in the order it sits on the shelf, no aisle
+    // column at all: the row order is the whole walking order.
+    const shelfOnly: Item[] = [
+      item({ id: 's1', name: 'Bananas', shelfSequence: 1 }),
+      item({ id: 's2', name: 'Rye Bread', shelfSequence: 2 }),
+      item({ id: 's3', name: 'Milk', shelfSequence: 3 }),
+      item({ id: 's4', name: 'Toilet Paper', shelfSequence: 4 }),
+    ];
+    const pickList = buildPickList({
+      lines: [
+        line({ id: 'a', position: 0, itemId: 's4' }),
+        line({ id: 'b', position: 1, itemId: 's1' }),
+        line({ id: 'c', position: 2, itemId: 's3' }),
+      ],
+      items: new Map(shelfOnly.map((entry) => [entry.id, entry])),
+      aisles: [],
+    });
+
+    expect(pickList.groups).toHaveLength(1);
+    expect(pickList.groups[0].aisleName).toBe('In shelf order');
+    expect(pickList.groups[0].entries.map((entry) => entry.item?.name)).toEqual([
+      'Bananas',
+      'Milk',
+      'Toilet Paper',
+    ]);
+    expect(pickList.needsAttention).toEqual([]);
+  });
+
+  it('keeps genuinely unlocated items apart from shelf-ordered ones', () => {
+    const mixed: Item[] = [
+      item({ id: 's1', name: 'Bananas', shelfSequence: 1 }),
+      item({ id: 's2', name: 'Mystery Item' }),
+    ];
+    const pickList = buildPickList({
+      lines: [
+        line({ id: 'a', position: 0, itemId: 's2' }),
+        line({ id: 'b', position: 1, itemId: 's1' }),
+      ],
+      items: new Map(mixed.map((entry) => [entry.id, entry])),
+      aisles: [],
+    });
+    expect(pickList.groups.map((group) => group.aisleName)).toEqual([
+      'In shelf order',
+      'Location unknown — fix me',
+    ]);
+  });
+
+  it('puts named aisles ahead of an un-aisled shelf run', () => {
+    const mixed: Item[] = [
+      item({ id: 'p1', name: 'Bananas', aisle: '1', shelfSequence: 1 }),
+      item({ id: 's1', name: 'Loose Item', shelfSequence: 5 }),
+    ];
+    const pickList = buildPickList({
+      lines: [
+        line({ id: 'a', position: 0, itemId: 's1' }),
+        line({ id: 'b', position: 1, itemId: 'p1' }),
+      ],
+      items: new Map(mixed.map((entry) => [entry.id, entry])),
+      aisles: [{ id: '1', sequence: 1, name: 'Produce' }],
+    });
+    expect(pickList.groups.map((group) => group.aisleName)).toEqual(['Produce', 'In shelf order']);
+  });
+
   it('handles an aisle that is missing from the walking order sheet', () => {
     const pickList = buildPickList({
       lines: [line({ id: 'a', position: 0, itemId: '5001' }), line({ id: 'b', position: 1, itemId: '2001' })],

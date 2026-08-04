@@ -130,7 +130,16 @@ The `sequence` column is optional; without it, the row order *is* the walking or
 **Option 2** — give one sheet with every item already in exact shelf order. Tick
 **"These rows are already in exact shelf walking order"** in the import preview, and the
 row position becomes each item's shelf sequence, with the aisle order taken from where
-each aisle first appears.
+each aisle first appears. Nothing has to be adjusted item by item afterwards: upload the
+sheet, and the walk is set.
+
+Option 2 works even with **no aisle column at all** — a single column of product names in
+shelf order is a complete walking order, and the pick list becomes one continuous run
+under the heading *In shelf order*. Adding an aisle, section or department column is
+optional; it only buys you headings to break the walk into named stretches.
+
+When the shelves change, correct the sheet and upload it again. The sheet is the source
+of truth, so a re-upload re-sets every position in one go.
 
 ### Re-uploading
 
@@ -221,9 +230,9 @@ The catalog is indexed once and held in memory, so a 40-line order against a
 
 **Sorting** is `(aisle walking order, shelf_sequence, name)`. An aisle that appears on a
 product but not in Sheet B still sorts sensibly — numerically where it can — but always
-after every known aisle, and products with no aisle at all land in a clearly labelled
-*Location unknown — fix me* group at the end. An incomplete Sheet B degrades; it never
-scrambles the walk.
+after every known aisle. Products with no aisle but a known shelf position form their own
+*In shelf order* run after the named aisles; only products with no position at all land in
+*Location unknown — fix me*. An incomplete Sheet B degrades; it never scrambles the walk.
 
 ---
 
