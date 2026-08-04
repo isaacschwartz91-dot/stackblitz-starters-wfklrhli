@@ -10,13 +10,14 @@ import { emptyItem } from '../../core/models';
 import { searchItems } from '../../matching/matcher';
 import { aisleKey } from '../../matching/pick-list';
 import { SheetImport } from '../../import/sheet-import';
+import { SelectValue } from '../../ui/select-value';
 
 const PAGE_SIZE = 60;
 
 @Component({
   selector: 'app-catalog',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, SheetImport],
+  imports: [RouterLink, SheetImport, SelectValue],
   template: `
     <div class="page">
       <div class="page-head">
@@ -70,7 +71,7 @@ const PAGE_SIZE = 60;
           </label>
           <label class="field" style="margin: 0">
             <span>Aisle</span>
-            <select [value]="aisleFilter()" (change)="setAisle(value($event))">
+            <select [selectValue]="aisleFilter()" (change)="setAisle(value($event))">
               <option value="">All aisles</option>
               <option value="__none__">No aisle set</option>
               @for (aisle of data.sortedAisles(); track aisle.id) {
@@ -80,7 +81,7 @@ const PAGE_SIZE = 60;
           </label>
           <label class="field" style="margin: 0">
             <span>Department</span>
-            <select [value]="departmentFilter()" (change)="setDepartment(value($event))">
+            <select [selectValue]="departmentFilter()" (change)="setDepartment(value($event))">
               <option value="">All</option>
               @for (department of departments(); track department) {
                 <option [value]="department">{{ department }}</option>

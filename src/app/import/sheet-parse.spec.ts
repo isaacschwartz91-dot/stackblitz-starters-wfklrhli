@@ -174,6 +174,103 @@ describe('buildItems', () => {
     expect(skipped).toBe(1);
   });
 
+  describe('a plain sheet in shelf order, with nothing else in it', () => {
+    it('takes the walking order from the row order, with no options at all', () => {
+      const headers = ['item_name'];
+      const { items, derivedAisles, usedRowOrder } = buildItems(
+        table(headers, [['Bananas'], ['Rye Bread'], ['Milk'], ['Toilet Paper']]),
+        guessItemMapping(headers),
+      );
+
+      expect(usedRowOrder).toBe(true);
+      expect(items.map((entry) => [entry.name, entry.shelfSequence])).toEqual([
+        ['Bananas', 1],
+        ['Rye Bread', 2],
+        ['Milk', 3],
+        ['Toilet Paper', 4],
+      ]);
+      // No aisle column is not a gap to fill in — the walk is already complete.
+      expect(derivedAisles).toEqual([]);
+    });
+
+    it('derives the aisle walking order too, when the sheet names sections', () => {
+      const headers = ['item_name', 'aisle'];
+      const { items, derivedAisles } = buildItems(
+        table(headers, [
+          ['Bananas', 'Produce'],
+          ['Apples', 'Produce'],
+          ['Rye Bread', 'Bakery'],
+          ['Milk', 'Dairy'],
+        ]),
+        guessItemMapping(headers),
+      );
+
+      expect(items.map((entry) => entry.shelfSequence)).toEqual([1, 2, 3, 4]);
+      expect(derivedAisles).toEqual([
+        { id: 'Produce', sequence: 1, name: '' },
+        { id: 'Bakery', sequence: 2, name: '' },
+        { id: 'Dairy', sequence: 3, name: '' },
+      ]);
+    });
+
+    it('orders aisles by code when a sequence column means the rows are unordered', () => {
+      // A catalog exported alphabetically: row position says nothing about the
+      // walk, so aisle 2 must still come before aisle 10.
+      const headers = ['item_name', 'aisle', 'shelf_sequence'];
+      const { derivedAisles } = buildItems(
+        table(headers, [
+          ['Apples', '10', '1'],
+          ['Bread', '2', '1'],
+          ['Cheese', '1', '1'],
+        ]),
+        guessItemMapping(headers),
+      );
+      expect(derivedAisles.map((aisle) => aisle.id)).toEqual(['1', '2', '10']);
+    });
+
+    it('still lets an explicit sequence column win when there is one', () => {
+      const headers = ['item_name', 'shelf_sequence'];
+      const { items, usedRowOrder } = buildItems(
+        table(headers, [
+          ['Bananas', '30'],
+          ['Rye Bread', '10'],
+          ['Milk', '20'],
+        ]),
+        guessItemMapping(headers),
+      );
+      expect(usedRowOrder).toBe(false);
+      expect(items.map((entry) => entry.shelfSequence)).toEqual([30, 10, 20]);
+    });
+
+    it('can be told to ignore a sequence column and use the row order instead', () => {
+      const headers = ['item_name', 'shelf_sequence'];
+      const { items, usedRowOrder } = buildItems(
+        table(headers, [
+          ['Bananas', '30'],
+          ['Rye Bread', '10'],
+          ['Milk', '20'],
+        ]),
+        guessItemMapping(headers),
+        { rowOrderIsWalkingOrder: true },
+      );
+      expect(usedRowOrder).toBe(true);
+      expect(items.map((entry) => entry.shelfSequence)).toEqual([1, 2, 3]);
+    });
+
+    it('fills the gaps when only some rows carry a sequence', () => {
+      const headers = ['item_name', 'shelf_sequence'];
+      const { items } = buildItems(
+        table(headers, [
+          ['Bananas', '5'],
+          ['Rye Bread', ''],
+          ['Milk', '9'],
+        ]),
+        guessItemMapping(headers),
+      );
+      expect(items.map((entry) => entry.shelfSequence)).toEqual([5, 2, 9]);
+    });
+  });
+
   it('option 2: row order becomes the walking order', () => {
     const { items, derivedAisles } = buildItems(
       table(

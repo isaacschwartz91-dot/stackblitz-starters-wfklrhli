@@ -11,6 +11,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@a
 
 import { DataService, messageOf } from '../core/data.service';
 import { ToastService } from '../core/toast.service';
+import { SelectValue } from '../ui/select-value';
 import type { Aisle, Item } from '../core/models';
 import {
   AISLE_FIELD_LABELS,
@@ -39,6 +40,7 @@ interface SheetPlan {
 @Component({
   selector: 'app-sheet-import',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [SelectValue],
   template: `
     <div class="card">
       <div class="card-head">
@@ -76,7 +78,7 @@ interface SheetPlan {
               <span class="spacer"></span>
               <label class="field" style="margin: 0; min-width: 190px">
                 <span>Treat this sheet as</span>
-                <select [value]="plan.role" (change)="setRole(plan, value($event))">
+                <select [selectValue]="plan.role" (change)="setRole(plan, value($event))">
                   <option value="items">Master item list (Sheet A)</option>
                   <option value="aisles">Aisle walking order (Sheet B)</option>
                   <option value="skip">Skip this sheet</option>
@@ -86,17 +88,21 @@ interface SheetPlan {
 
             @if (plan.role !== 'skip') {
               @if (plan.role === 'items') {
-                <label class="check" style="margin-bottom: 0.6rem">
-                  <input
-                    type="checkbox"
-                    [checked]="plan.rowOrderIsWalkingOrder"
-                    (change)="toggleRowOrder(plan)"
-                  />
-                  <span>
-                    These rows are <strong>already in exact shelf walking order</strong> (Sheet B,
-                    option 2) — use the row order as the shelf sequence
-                  </span>
-                </label>
+                <div class="notice ok" style="margin: 0 0 0.6rem">
+                  {{ orderExplanation(plan) }}
+                </div>
+                @if (hasSequenceColumn(plan)) {
+                  <label class="check" style="margin-bottom: 0.6rem">
+                    <input
+                      type="checkbox"
+                      [checked]="plan.rowOrderIsWalkingOrder"
+                      (change)="toggleRowOrder(plan)"
+                    />
+                    <span>
+                      Ignore that column and use <strong>the row order of this sheet</strong> instead
+                    </span>
+                  </label>
+                }
               }
 
               <div class="table-wrap" style="max-height: 340px; overflow: auto">
@@ -109,7 +115,7 @@ interface SheetPlan {
                             {{ header || '(no header)' }}
                           </div>
                           <select
-                            [value]="plan.mapping[$index]"
+                            [selectValue]="plan.mapping[$index]"
                             (change)="setMapping(plan, $index, value($event))"
                           >
                             @for (option of fieldOptions(plan.role); track option.key) {
@@ -243,6 +249,28 @@ export class SheetImport {
     this.update(plan, { rowOrderIsWalkingOrder: !plan.rowOrderIsWalkingOrder });
   }
 
+  protected hasSequenceColumn(plan: SheetPlan): boolean {
+    return plan.mapping.includes('shelf_sequence');
+  }
+
+  /**
+   * Plain English for what the pick list will follow. This is the sentence the
+   * store owner should be able to read once and stop worrying.
+   */
+  protected orderExplanation(plan: SheetPlan): string {
+    const hasAisle = plan.mapping.includes('aisle');
+    const bySequence = this.hasSequenceColumn(plan) && !plan.rowOrderIsWalkingOrder;
+
+    const positions = bySequence
+      ? 'Shelf positions come from the sequence column.'
+      : `Pick lists will follow this sheet's row order, top to bottom — row 1 is the first stop on the walk.`;
+    const grouping = hasAisle
+      ? ' Aisles are taken from the aisle column, in the order they first appear here.'
+      : ' No aisle column, so the walk is one continuous run with no headings.';
+
+    return positions + grouping;
+  }
+
   /** What blocks this sheet from importing at all, or null when it is ready. */
   protected planProblem(plan: SheetPlan): string | null {
     if (plan.role === 'skip') return null;
@@ -255,17 +283,8 @@ export class SheetImport {
   /** Things worth knowing that do not stop the import. */
   protected planWarning(plan: SheetPlan): string | null {
     if (plan.role !== 'items' || this.planProblem(plan) !== null) return null;
-    const hasAisle = plan.mapping.includes('aisle');
-
-    if (!hasAisle && plan.rowOrderIsWalkingOrder) {
-      // A complete walk, just without headings. Perfectly usable.
-      return 'No aisle column, so the pick list will be one continuous run in this exact row order. Map a section or department column if you would rather have aisle headings.';
-    }
-    if (!hasAisle) {
-      return 'No aisle column — these products will land in "Location unknown" until one is set. If these rows are already in shelf order, tick the box above instead.';
-    }
-    if (!plan.mapping.includes('shelf_sequence') && !plan.rowOrderIsWalkingOrder) {
-      return 'No shelf sequence column — within each aisle, items will sort by name.';
+    if (!plan.mapping.includes('aisle')) {
+      return 'Want the walk broken into named stretches? Point one column at "Aisle" above — any section or department name will do. Not required.';
     }
     return null;
   }
@@ -295,6 +314,7 @@ export class SheetImport {
       let derivedAisles: Aisle[] | null = null;
       let generatedIds = 0;
       let skipped = 0;
+      let usedRowOrder = false;
 
       for (const plan of this.plans()) {
         if (this.planProblem(plan) !== null) continue;
@@ -305,6 +325,7 @@ export class SheetImport {
           items.push(...result.items);
           generatedIds += result.generatedIds;
           skipped += result.skipped;
+          usedRowOrder = usedRowOrder || result.usedRowOrder;
           if (result.derivedAisles.length > 0) derivedAisles = result.derivedAisles;
         } else if (plan.role === 'aisles') {
           const result = buildAisles(plan.table, plan.mapping);
@@ -329,8 +350,8 @@ export class SheetImport {
       const notes = [
         added > 0 ? `${added} new products` : '',
         updated > 0 ? `${updated} updated` : '',
-        finalAisles !== null ? `${finalAisles.length} aisles` : '',
-        generatedIds > 0 ? `${generatedIds} IDs generated` : '',
+        finalAisles !== null && finalAisles.length > 0 ? `${finalAisles.length} aisles` : '',
+        usedRowOrder ? 'walk follows the sheet order' : 'walk follows the sequence column',
         skipped > 0 ? `${skipped} rows skipped` : '',
       ].filter((note) => note !== '');
 

@@ -11,8 +11,8 @@ of these from **Catalog → Upload sheets**. They describe the same imaginary st
 | `sheet-b-walking-order.xlsx` | Sheet B, option 1: aisles listed in walking order. |
 | `combined-one-workbook.xlsx` | Both sheets as two tabs of one workbook. Upload this one file and both are detected. |
 | `sheet-a-alternate-column-names.xlsx` | A different store's export — `SKU`, `Description`, `Manufacturer`, `Pack Size`, `Aisle #`, `Shelf Seq`, `UOM`, `Retail`. Detected without any manual mapping. |
-| `sheet-b-option2-items-in-walking-order.xlsx` | Sheet B, option 2: every item already in exact shelf order, no sequence column. Tick *"These rows are already in exact shelf walking order"* in the import preview. |
-| `shelf-order-one-sheet-no-aisles.xlsx` | The simplest possible sheet that still works: one column of product names, in the order they sit on the shelf. No aisle column, no sequence column. Tick the same box and the pick list comes out as one continuous walk. |
+| `sheet-b-option2-items-in-walking-order.xlsx` | Every item already in exact shelf order with a section column — upload it and the walk is set, with aisle headings. |
+| `shelf-order-one-sheet-no-aisles.xlsx` | The simplest sheet that works: one column of product names in the order they sit on the shelf. Nothing else, and nothing to configure — the pick list comes out as one continuous walk. |
 | `example-orders.txt` | Three orders as they really arrive — phoned in, forwarded by email, and typed in a hurry with typos. Paste one into **New order**. |
 
 ## Replacing these with your own

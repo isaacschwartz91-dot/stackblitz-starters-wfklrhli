@@ -21,13 +21,14 @@ import type { Candidate } from '../../matching/matcher';
 import { splitOrderText } from '../../matching/parse-line';
 import { aisleKey } from '../../matching/pick-list';
 import { ItemPicker } from '../../ui/item-picker';
+import { SelectValue } from '../../ui/select-value';
 
 type Scope = 'none' | 'customer' | 'global';
 
 @Component({
   selector: 'app-order-edit',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, RouterLink, ItemPicker],
+  imports: [FormsModule, RouterLink, ItemPicker, SelectValue],
   template: `
     <div class="page">
       <div class="page-head">
@@ -53,7 +54,7 @@ type Scope = 'none' | 'customer' | 'global';
         <div class="inline-fields">
           <label class="field">
             <span>Customer</span>
-            <select [value]="order().customerId ?? ''" (change)="changeCustomer($event)">
+            <select [selectValue]="order().customerId ?? ''" (change)="changeCustomer($event)">
               <option value="">— Walk-in / no customer —</option>
               @for (customer of sortedCustomers(); track customer.id) {
                 <option [value]="customer.id">{{ customer.name }}</option>

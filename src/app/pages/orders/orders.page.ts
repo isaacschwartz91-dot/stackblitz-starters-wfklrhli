@@ -7,11 +7,12 @@ import { OrderService } from '../../core/order.service';
 import { ToastService } from '../../core/toast.service';
 import type { Order, OrderStatus } from '../../core/models';
 import { ORDER_STATUS_LABEL } from '../../core/models';
+import { SelectValue } from '../../ui/select-value';
 
 @Component({
   selector: 'app-orders',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, DatePipe],
+  imports: [RouterLink, DatePipe, SelectValue],
   template: `
     <div class="page">
       <div class="page-head">
@@ -36,7 +37,7 @@ import { ORDER_STATUS_LABEL } from '../../core/models';
           </label>
           <label class="field" style="margin: 0">
             <span>Status</span>
-            <select [value]="status()" (change)="status.set(value($event))">
+            <select [selectValue]="status()" (change)="status.set(value($event))">
               <option value="">All</option>
               <option value="draft">Draft</option>
               <option value="ready">Ready to pick</option>

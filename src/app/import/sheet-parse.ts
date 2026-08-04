@@ -253,18 +253,24 @@ function toNumber(value: string): number | null {
 
 export interface ItemImportOptions {
   /**
-   * Sheet B Option 2: the rows are already in exact walking order, so the row
-   * number becomes the shelf sequence and first appearance sets aisle order.
+   * Force the row order to be the shelf order even when the sheet also has a
+   * sequence column. Off by default, because an explicit column is a
+   * deliberate statement and should win.
+   *
+   * It is not needed for the ordinary case: a sheet with no sequence column
+   * always takes its shelf order from the row order.
    */
   rowOrderIsWalkingOrder: boolean;
 }
 
 export interface ItemImportResult {
   items: Item[];
-  /** Aisle order derived from the sheet, when Option 2 was used. */
+  /** The aisle walking order this sheet implies, in the order it implies it. */
   derivedAisles: Aisle[];
   skipped: number;
   generatedIds: number;
+  /** True when the row order supplied the shelf positions. */
+  usedRowOrder: boolean;
 }
 
 export function buildItems(
@@ -277,6 +283,9 @@ export function buildItems(
   const idColumn = columnOf('item_id');
   const aisleColumn = columnOf('aisle');
   const sequenceColumn = columnOf('shelf_sequence');
+
+  // No sequence column means the rows themselves carry the shelf order.
+  const useRowOrder = options.rowOrderIsWalkingOrder || sequenceColumn < 0;
 
   const items: Item[] = [];
   const seen = new Set<string>();
@@ -306,12 +315,14 @@ export function buildItems(
     if (seen.has(id)) id = stableId(id, name, brand, size, String(rowIndex));
     seen.add(id);
 
+    // The sheet's own order is the store's order. An explicit sequence column
+    // overrides it; without one, row 1 is simply the first thing on the walk.
     const explicitSequence = toNumber(cell(sequenceColumn));
-    const shelfSequence = options.rowOrderIsWalkingOrder
-      ? rowIndex + 1
-      : explicitSequence;
+    const shelfSequence = useRowOrder ? rowIndex + 1 : (explicitSequence ?? rowIndex + 1);
 
-    if (aisle !== '' && !aisleFirstSeen.has(aisle)) aisleFirstSeen.set(aisle, rowIndex);
+    if (aisle !== '' && !aisleFirstSeen.has(aisle)) {
+      aisleFirstSeen.set(aisle, useRowOrder ? rowIndex : (explicitSequence ?? rowIndex));
+    }
 
     items.push({
       id,
@@ -329,13 +340,21 @@ export function buildItems(
     });
   });
 
-  const derivedAisles: Aisle[] = options.rowOrderIsWalkingOrder
-    ? [...aisleFirstSeen.entries()]
-        .sort((a, b) => a[1] - b[1])
-        .map(([aisle], position) => ({ id: aisle, sequence: position + 1, name: '' }))
-    : [];
+  // Where each aisle sits in the walk.
+  //
+  // When the rows carry the order, first appearance is the answer. When a
+  // sequence column carries it instead, the row order means nothing — a sheet
+  // sorted alphabetically would produce a nonsense walk — so aisles fall back
+  // to their own codes, read naturally so "2" comes before "10".
+  const derivedAisles: Aisle[] = (
+    useRowOrder
+      ? [...aisleFirstSeen.entries()].sort((a, b) => a[1] - b[1]).map(([aisle]) => aisle)
+      : [...aisleFirstSeen.keys()].sort((a, b) =>
+          a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }),
+        )
+  ).map((aisle, position) => ({ id: aisle, sequence: position + 1, name: '' }));
 
-  return { items, derivedAisles, skipped, generatedIds };
+  return { items, derivedAisles, skipped, generatedIds, usedRowOrder: useRowOrder };
 }
 
 export interface AisleImportResult {

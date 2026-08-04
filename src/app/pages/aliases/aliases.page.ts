@@ -16,11 +16,12 @@ import { ToastService } from '../../core/toast.service';
 import type { Alias, Item } from '../../core/models';
 import { itemDetail } from '../../core/models';
 import { ItemPicker } from '../../ui/item-picker';
+import { SelectValue } from '../../ui/select-value';
 
 @Component({
   selector: 'app-aliases',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DatePipe, ItemPicker],
+  imports: [DatePipe, ItemPicker, SelectValue],
   template: `
     <div class="page">
       <div class="page-head">
@@ -48,7 +49,7 @@ import { ItemPicker } from '../../ui/item-picker';
           </label>
           <label class="field" style="margin: 0">
             <span>Scope</span>
-            <select [value]="scopeFilter()" (change)="scopeFilter.set(value($event))">
+            <select [selectValue]="scopeFilter()" (change)="scopeFilter.set(value($event))">
               <option value="">Everything</option>
               <option value="__global__">Store-wide only</option>
               @for (customer of data.customers(); track customer.id) {
@@ -148,7 +149,7 @@ import { ItemPicker } from '../../ui/item-picker';
 
           <label class="field">
             <span>Applies to</span>
-            <select [value]="scope()" (change)="scope.set(value($event))">
+            <select [selectValue]="scope()" (change)="scope.set(value($event))">
               <option value="__global__">Everyone (store-wide)</option>
               @for (customer of data.customers(); track customer.id) {
                 <option [value]="customer.id">{{ customer.name }} only</option>

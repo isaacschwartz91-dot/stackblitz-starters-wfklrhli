@@ -115,9 +115,38 @@ Your real column names do not have to look like this. `SKU`, `Description`,
 recognised, along with many other spellings — and anything unrecognised can be mapped by
 hand in the preview.
 
-### Sheet B — walking order
+### The walking order
 
-**Option 1** — list the aisles in the order you walk them:
+**The row order of your sheet is the walking order.** Row 1 is the first thing you pick,
+row 2 the second, all the way down. Upload the sheet, press Import, and the pick list
+follows it — no checkbox, no second sheet, no per-item setup.
+
+That means the smallest sheet that works is a **single column of product names, listed in
+the order they sit on the shelf**:
+
+| `item_name` |
+|---|
+| Bananas |
+| Apples Gala |
+| Rye Bread |
+| Milk Whole Gallon |
+| … |
+
+Add more columns whenever you want more out of it — none are required:
+
+- an **aisle / section / department** column breaks the walk into named stretches with
+  step numbers, instead of one continuous run;
+- an **item ID / SKU** column makes later re-uploads update products cleanly even when a
+  name changes;
+- **brand**, **size**, **unit**, **price** and **barcode** all sharpen matching and fill
+  in the pick list and the estimated total.
+
+**If your sheet already has a shelf sequence column**, that column wins and the row order
+is ignored — the import screen says which one it is using, and offers a checkbox to
+override it. You never have to touch that unless you want to.
+
+**Aisles in the order you walk them**, as a separate sheet, if you prefer to state it
+explicitly:
 
 | `sequence` | `aisle` | `aisle_name` |
 |---|---|---|
@@ -125,21 +154,11 @@ hand in the preview.
 | 2 | 2 | Bakery |
 | 3 | 3 | Dairy |
 
-The `sequence` column is optional; without it, the row order *is* the walking order.
+The `sequence` column is optional here too; without it the row order is the walking order.
+An explicit sheet like this always overrides the order worked out from your item sheet.
 
-**Option 2** — give one sheet with every item already in exact shelf order. Tick
-**"These rows are already in exact shelf walking order"** in the import preview, and the
-row position becomes each item's shelf sequence, with the aisle order taken from where
-each aisle first appears. Nothing has to be adjusted item by item afterwards: upload the
-sheet, and the walk is set.
-
-Option 2 works even with **no aisle column at all** — a single column of product names in
-shelf order is a complete walking order, and the pick list becomes one continuous run
-under the heading *In shelf order*. Adding an aisle, section or department column is
-optional; it only buys you headings to break the walk into named stretches.
-
-When the shelves change, correct the sheet and upload it again. The sheet is the source
-of truth, so a re-upload re-sets every position in one go.
+When the shelves change, correct the sheet and upload it again. The sheet is the source of
+truth, so a re-upload re-sets every position in one go.
 
 ### Re-uploading
 
