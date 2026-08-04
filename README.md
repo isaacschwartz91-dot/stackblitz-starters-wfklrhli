@@ -215,6 +215,35 @@ sheet forgot (the app tells you which ones those are).
 
 ---
 
+## Who can get in
+
+Worth understanding before you put the address anywhere, because the honest answer differs
+depending on how you have it set up.
+
+**With browser storage (the default), there are no accounts.** Anyone who has the web
+address can open the app. What they *cannot* do is see your data: the catalog, customers,
+shorthand and orders live in each person's own browser, so a stranger who opens your
+address gets an empty copy of the software with none of your store in it. Nothing of yours
+travels anywhere.
+
+Two things follow from that, and **Settings → Who can get in** now says both plainly
+instead of leaving you to discover them:
+
+- **A passcode on the device.** Set one and this phone, tablet or computer asks for it
+  before showing anything — which is what stops a passer-by reading the order history off
+  the till tablet. Only a PBKDF2 hash of it is stored, never the passcode. It is per
+  device, and it does not restrict the address: a visitor who has never been here has
+  nothing to check against, and would just get the same empty copy.
+- **Staff accounts, which do restrict the data.** Connect Supabase (below) and the app
+  requires a real email-and-password login, with the database itself refusing to hand any
+  row to someone who is not signed in. This is the only option here enforced by a server
+  rather than by the browser in front of you, and it is the one to use if staff share a
+  catalog and an order history.
+
+If you also want the *address* itself private — a gate before the app even loads — that
+belongs to your host rather than to this app. Netlify offers site-level password
+protection and Netlify Identity; check which is on your plan.
+
 ## Going multi-user
 
 Out of the box everything lives in the browser (IndexedDB). That is genuinely usable for

@@ -3,19 +3,23 @@ import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 
 import { AuthService } from './core/auth.service';
 import { DataService } from './core/data.service';
+import { LockService } from './core/lock.service';
 import { Toasts } from './ui/toasts';
 import { LoginPage } from './pages/login/login.page';
+import { LockPage } from './pages/lock/lock.page';
 
 @Component({
   selector: 'app-root',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, Toasts, LoginPage],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, Toasts, LoginPage, LockPage],
   template: `
     <div class="app-shell">
       @if (data.loading() || auth.checking()) {
         <div class="page">
           <div class="empty">Loading the store…</div>
         </div>
+      } @else if (lock.locked()) {
+        <app-lock />
       } @else if (needsLogin()) {
         <app-login />
       } @else {
@@ -41,6 +45,9 @@ import { LoginPage } from './pages/login/login.page';
             {{ data.backendKind === 'supabase' ? 'Cloud' : 'This browser' }}
           </span>
           <span class="small muted hide-narrow">{{ auth.displayName() }}</span>
+          @if (lock.enabled()) {
+            <button type="button" class="ghost small" (click)="lock.lockNow()">Lock</button>
+          }
           @if (auth.requiresLogin()) {
             <button type="button" class="ghost small" (click)="signOut()">Sign out</button>
           }
@@ -68,6 +75,7 @@ import { LoginPage } from './pages/login/login.page';
 export class App {
   protected readonly data = inject(DataService);
   protected readonly auth = inject(AuthService);
+  protected readonly lock = inject(LockService);
 
   protected readonly needsLogin = computed(() => this.auth.requiresLogin() && !this.auth.signedIn());
 

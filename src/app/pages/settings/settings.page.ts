@@ -12,6 +12,7 @@ import { ToastService } from '../../core/toast.service';
 import type { AppSettings, LinkedSheet, Snapshot } from '../../core/models';
 import { newId } from '../../core/ids';
 import { SheetSyncService } from '../../import/sheet-sync.service';
+import { LockService } from '../../core/lock.service';
 import { demoSnapshot, DEMO_ORDER_TEXT } from '../../seed/demo-data';
 import { SelectValue } from '../../ui/select-value';
 
@@ -126,6 +127,101 @@ import { SelectValue } from '../../ui/select-value';
               Save
             </button>
           </div>
+        </div>
+
+        <!-- Access ---------------------------------------------------------- -->
+        <div class="card">
+          <div class="card-head">
+            <h2>Who can get in</h2>
+            <span class="spacer"></span>
+            <span class="chip" [class.ok]="accountsRequired()" [class.warn]="!accountsRequired()">
+              {{ accountsRequired() ? 'Staff accounts' : 'No accounts' }}
+            </span>
+          </div>
+
+          @if (!accountsRequired()) {
+            <div class="notice warn">
+              <strong>Anyone with this web address can open the app.</strong>
+              They do <em>not</em> see your data — the catalog, customers and orders live in each
+              person's own browser, so a stranger gets an empty copy. But nothing is checking who
+              they are, and nothing is stopping someone who picks up this device.
+            </div>
+            <p class="small muted">
+              For real staff accounts — one shared catalog, one order history, and a login that a
+              server actually enforces — connect a Supabase project below. That is the only setting
+              here that keeps people out of your data rather than out of one device.
+            </p>
+          } @else {
+            <div class="notice ok">
+              Staff sign in with an email and password, and the database refuses to hand out any
+              row to someone who is not signed in.
+            </div>
+          }
+
+          <h3 style="margin: 1rem 0 0.4rem">Passcode on this device</h3>
+          <p class="small muted">
+            Locks the app on this phone, tablet or computer so a passer-by cannot read what is
+            stored here. It is per device, and it does not restrict the web address.
+          </p>
+
+          @if (!lock.available) {
+            <div class="notice warn">
+              A passcode needs a secure connection. Open the app over https (or on localhost) to set
+              one.
+            </div>
+          } @else if (lock.enabled()) {
+            <div class="notice ok">This device asks for a passcode when the app is opened.</div>
+            <label class="field">
+              <span>Current passcode</span>
+              <input
+                type="password"
+                autocomplete="current-password"
+                [value]="currentPasscode()"
+                (input)="currentPasscode.set(value($event))"
+              />
+            </label>
+            <div class="button-row">
+              <button type="button" (click)="lock.lockNow()">Lock now</button>
+              <button type="button" class="danger" (click)="removePasscode()" [disabled]="busy()">
+                Remove passcode
+              </button>
+            </div>
+          } @else {
+            <div class="inline-fields">
+              <label class="field">
+                <span>New passcode</span>
+                <input
+                  type="password"
+                  autocomplete="new-password"
+                  [value]="newPasscode()"
+                  (input)="newPasscode.set(value($event))"
+                />
+              </label>
+              <label class="field">
+                <span>Repeat it</span>
+                <input
+                  type="password"
+                  autocomplete="new-password"
+                  [value]="repeatPasscode()"
+                  (input)="repeatPasscode.set(value($event))"
+                />
+              </label>
+            </div>
+            <div class="button-row">
+              <button type="button" class="primary" (click)="setPasscode()" [disabled]="busy()">
+                Set passcode
+              </button>
+            </div>
+            <p class="small dim" style="margin: 0.6rem 0 0">
+              It is never stored — only a one-way hash of it is. If it is forgotten there is no
+              recovery; clearing the browser's data for this site removes the lock and the store
+              data on this device together.
+            </p>
+          }
+
+          @if (lockMessage()) {
+            <div class="notice" style="margin-top: 0.7rem">{{ lockMessage() }}</div>
+          }
         </div>
 
         <!-- Storage -------------------------------------------------------- -->
@@ -386,6 +482,15 @@ export class SettingsPage {
   private readonly toast = inject(ToastService);
 
   protected readonly sync = inject(SheetSyncService);
+  protected readonly lock = inject(LockService);
+
+  protected readonly newPasscode = signal('');
+  protected readonly repeatPasscode = signal('');
+  protected readonly currentPasscode = signal('');
+  protected readonly lockMessage = signal('');
+
+  /** True when a server, not this device, decides who gets in. */
+  protected readonly accountsRequired = computed(() => this.auth.requiresLogin());
 
   protected readonly draft = signal<AppSettings>({ ...this.data.settings() });
   protected readonly busy = signal(false);
@@ -455,6 +560,40 @@ export class SettingsPage {
 
   protected patch(patch: Partial<AppSettings>): void {
     this.draft.set({ ...this.draft(), ...patch });
+  }
+
+  /* ---------------------------------------------------------------- lock -- */
+
+  protected async setPasscode(): Promise<void> {
+    this.lockMessage.set('');
+    if (this.newPasscode() !== this.repeatPasscode()) {
+      this.lockMessage.set('The two passcodes do not match.');
+      return;
+    }
+    this.busy.set(true);
+    try {
+      await this.lock.setPasscode(this.newPasscode());
+      this.newPasscode.set('');
+      this.repeatPasscode.set('');
+      this.toast.ok('Passcode set. This device will ask for it from now on.');
+    } catch (cause) {
+      this.lockMessage.set(messageOf(cause));
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
+  protected async removePasscode(): Promise<void> {
+    this.lockMessage.set('');
+    this.busy.set(true);
+    try {
+      const removed = await this.lock.remove(this.currentPasscode());
+      this.currentPasscode.set('');
+      if (removed) this.toast.ok('Passcode removed.');
+      else this.lockMessage.set('That passcode does not match, so nothing was changed.');
+    } finally {
+      this.busy.set(false);
+    }
   }
 
   /* -------------------------------------------------------- linked sheets -- */
