@@ -162,6 +162,20 @@ export class DataService {
     return customer;
   }
 
+  /** Insert-or-update many at once — the customer sheet import. */
+  async saveCustomers(customers: Customer[]): Promise<void> {
+    if (customers.length === 0) return;
+    await this.backendRef.upsertCustomers(customers);
+    const byId = new Map(customers.map((customer) => [customer.id, customer]));
+    const current = this.customers();
+    const existingIds = new Set(current.map((customer) => customer.id));
+    const merged = current.map((customer) => byId.get(customer.id) ?? customer);
+    for (const customer of customers) {
+      if (!existingIds.has(customer.id)) merged.push(customer);
+    }
+    this.customers.set(merged);
+  }
+
   async createCustomer(name: string, extra: Partial<Customer> = {}): Promise<Customer> {
     const customer: Customer = {
       id: newId('cust'),

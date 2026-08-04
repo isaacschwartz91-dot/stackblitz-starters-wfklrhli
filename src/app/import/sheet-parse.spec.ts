@@ -3,13 +3,17 @@ import * as XLSX from 'xlsx';
 
 import {
   buildAisles,
+  buildCustomers,
   buildItems,
   guessAisleMapping,
+  guessCustomerMapping,
   guessItemMapping,
   guessSheetRole,
   readWorkbook,
   type SheetTable,
 } from './sheet-parse';
+import type { Customer } from '../core/models';
+import { normalizeSheetUrl } from './sheet-sync.service';
 
 function table(headers: string[], rows: string[][], name = 'Sheet1'): SheetTable {
   return { name, headers, rows };
@@ -102,8 +106,123 @@ describe('guessSheetRole', () => {
     expect(guessSheetRole(sheet)).toBe('aisles');
   });
 
+  it('spots a customer list by its phone or email column', () => {
+    expect(
+      guessSheetRole(
+        table(['Name', 'Phone', 'Address'], [['John Cohen', '555-1234', '14 Elm St']]),
+      ),
+    ).toBe('customers');
+    expect(
+      guessSheetRole(table(['Customer', 'Email'], [['John Cohen', 'j@example.com']])),
+    ).toBe('customers');
+  });
+
+  it('spots a customer list from the tab name when it has neither', () => {
+    expect(
+      guessSheetRole(table(['Name', 'Address'], [['John Cohen', '14 Elm St']], 'Customers')),
+    ).toBe('customers');
+  });
+
+  it('does not mistake a product sheet for a customer list', () => {
+    expect(
+      guessSheetRole(
+        table(
+          ['item_id', 'item_name', 'brand', 'aisle', 'price'],
+          [['1', 'Milk', 'Farmland', '3', '2.99']],
+        ),
+      ),
+    ).toBe('items');
+  });
+
   it('skips a sheet with nothing recognisable', () => {
     expect(guessSheetRole(table(['foo', 'bar'], [['1', '2']]))).toBe('skip');
+  });
+});
+
+describe('buildCustomers', () => {
+  function existing(partial: Partial<Customer> & { id: string; name: string }): Customer {
+    return {
+      phone: '',
+      email: '',
+      address: '',
+      notes: '',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      ...partial,
+    };
+  }
+
+  it('reads a customer sheet', () => {
+    const headers = ['Name', 'Phone', 'Email', 'Address', 'Notes'];
+    const { customers } = buildCustomers(
+      table(headers, [
+        ['John Cohen', '(555) 214-8890', 'jcohen@example.com', '14 Elm Street', 'Doorman'],
+        ['Sarah Klein', '(555) 663-2201', 'sarah@example.com', '882 Oak Avenue', ''],
+      ]),
+      guessCustomerMapping(headers),
+    );
+    expect(customers).toHaveLength(2);
+    expect(customers[0]).toMatchObject({
+      name: 'John Cohen',
+      phone: '(555) 214-8890',
+      email: 'jcohen@example.com',
+      address: '14 Elm Street',
+      notes: 'Doorman',
+    });
+  });
+
+  it('updates a customer already in the app instead of duplicating them', () => {
+    const headers = ['Name', 'Phone'];
+    const mapping = guessCustomerMapping(headers);
+    const known = [existing({ id: 'cust_john', name: 'John Cohen', phone: 'old' })];
+
+    const { customers, matchedExisting } = buildCustomers(
+      table(headers, [['John Cohen', '(555) 999-0000']]),
+      mapping,
+      known,
+    );
+
+    // Same id, so their learned shorthand and order history stay attached.
+    expect(customers[0].id).toBe('cust_john');
+    expect(customers[0].phone).toBe('(555) 999-0000');
+    expect(customers[0].createdAt).toBe('2026-01-01T00:00:00.000Z');
+    expect(matchedExisting).toBe(1);
+  });
+
+  it('honours an explicit customer id column', () => {
+    const headers = ['Account', 'Name'];
+    const { customers } = buildCustomers(
+      table(headers, [['C-104', 'John Cohen']]),
+      guessCustomerMapping(headers),
+    );
+    expect(customers[0].id).toBe('C-104');
+  });
+
+  it('gives the same id on a second import of an unchanged sheet', () => {
+    const headers = ['Name', 'Phone'];
+    const mapping = guessCustomerMapping(headers);
+    const rows = [['John Cohen', '555']];
+    const first = buildCustomers(table(headers, rows), mapping);
+    const second = buildCustomers(table(headers, rows), mapping, first.customers);
+    expect(second.customers[0].id).toBe(first.customers[0].id);
+  });
+
+  it('keeps two people who share a name apart', () => {
+    const headers = ['Name'];
+    const { customers } = buildCustomers(
+      table(headers, [['John Cohen'], ['John Cohen']]),
+      guessCustomerMapping(headers),
+    );
+    expect(customers[0].id).not.toBe(customers[1].id);
+  });
+
+  it('skips rows with no name', () => {
+    const headers = ['Name', 'Phone'];
+    const { customers, skipped } = buildCustomers(
+      table(headers, [['', '555'], ['Sarah Klein', '556']]),
+      guessCustomerMapping(headers),
+    );
+    expect(customers).toHaveLength(1);
+    expect(skipped).toBe(1);
   });
 });
 
@@ -375,5 +494,30 @@ describe('readWorkbook', () => {
     const parsed = await readWorkbook(new File([csv], 'items.csv'));
     expect(parsed.tables[0].rows).toHaveLength(2);
     expect(guessSheetRole(parsed.tables[0])).toBe('items');
+  });
+});
+
+describe('normalizeSheetUrl', () => {
+  it('turns a Google Sheets editor address into one that returns data', () => {
+    expect(
+      normalizeSheetUrl('https://docs.google.com/spreadsheets/d/1AbC-dEf_9/edit#gid=42'),
+    ).toBe('https://docs.google.com/spreadsheets/d/1AbC-dEf_9/export?format=csv&gid=42');
+  });
+
+  it('defaults to the first tab when the address names none', () => {
+    expect(normalizeSheetUrl('https://docs.google.com/spreadsheets/d/1AbC-dEf_9/edit')).toBe(
+      'https://docs.google.com/spreadsheets/d/1AbC-dEf_9/export?format=csv&gid=0',
+    );
+  });
+
+  it('leaves an already-published link alone', () => {
+    const published = 'https://docs.google.com/spreadsheets/d/e/2PACX-xyz/pub?output=csv';
+    expect(normalizeSheetUrl(published)).toBe(published);
+  });
+
+  it('leaves any other host alone', () => {
+    expect(normalizeSheetUrl('  https://example.com/shelf.xlsx  ')).toBe(
+      'https://example.com/shelf.xlsx',
+    );
   });
 });

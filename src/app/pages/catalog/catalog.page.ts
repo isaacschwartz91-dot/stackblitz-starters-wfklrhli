@@ -8,7 +8,7 @@ import { newId } from '../../core/ids';
 import type { Item } from '../../core/models';
 import { emptyItem } from '../../core/models';
 import { searchItems } from '../../matching/matcher';
-import { aisleKey } from '../../matching/pick-list';
+import { aisleKey, aisleLabel } from '../../matching/pick-list';
 import { SheetImport } from '../../import/sheet-import';
 import { SelectValue } from '../../ui/select-value';
 
@@ -75,7 +75,7 @@ const PAGE_SIZE = 60;
               <option value="">All aisles</option>
               <option value="__none__">No aisle set</option>
               @for (aisle of data.sortedAisles(); track aisle.id) {
-                <option [value]="aisle.id">{{ aisle.name || 'Aisle ' + aisle.id }}</option>
+                <option [value]="aisle.id">{{ label(aisle.id, aisle.name) }}</option>
               }
             </select>
           </label>
@@ -339,9 +339,13 @@ export class CatalogPage {
     this.limit.set(this.limit() + PAGE_SIZE * 2);
   }
 
+  protected label(code: string, name: string): string {
+    return aisleLabel(code, name);
+  }
+
   protected aisleName(code: string): string {
     const aisle = this.data.aisles().find((entry) => aisleKey(entry.id) === aisleKey(code));
-    return aisle?.name !== undefined && aisle.name !== '' ? aisle.name : `Aisle ${code}`;
+    return aisleLabel(code, aisle?.name ?? '');
   }
 
   protected startNew(): void {

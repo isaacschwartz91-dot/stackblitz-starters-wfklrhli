@@ -133,6 +133,23 @@ export interface OrderLine {
   substituteItemId: string | null;
 }
 
+/**
+ * A spreadsheet the app re-reads from a URL, so the store keeps editing one
+ * sheet and the software follows along.
+ */
+export interface LinkedSheet {
+  id: string;
+  /** Any URL that returns .xlsx or .csv bytes. */
+  url: string;
+  role: 'items' | 'aisles' | 'customers';
+  label: string;
+  /**
+   * Products missing from the sheet are hidden from matching on each sync.
+   * Their order history is untouched — nothing is ever deleted.
+   */
+  retireMissing: boolean;
+}
+
 /** App-wide settings an admin can change from the Settings screen. */
 export interface AppSettings {
   storeName: string;
@@ -145,6 +162,10 @@ export interface AppSettings {
   autoAcceptScore: number;
   /** Score below which a line is treated as unmatched. */
   reviewFloorScore: number;
+  /** Spreadsheets re-read from a URL. */
+  linkedSheets: LinkedSheet[];
+  /** Re-read them every time the app is opened. */
+  autoSyncOnOpen: boolean;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -154,6 +175,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   splitOnCommas: false,
   autoAcceptScore: 0.86,
   reviewFloorScore: 0.42,
+  linkedSheets: [],
+  autoSyncOnOpen: true,
 };
 
 /** Everything in the database — used for backup, restore and the demo seed. */

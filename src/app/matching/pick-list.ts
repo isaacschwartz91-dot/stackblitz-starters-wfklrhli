@@ -61,6 +61,20 @@ export function aisleOrderMap(aisles: Aisle[]): Map<string, number> {
   return map;
 }
 
+/**
+ * What to call an aisle on screen.
+ *
+ * Its given name wins. Failing that, a numeric code reads as "Aisle 3", while
+ * a code that is already a word — "Dairy", "Household" — is simply itself,
+ * because "Aisle Household" is not how anyone speaks.
+ */
+export function aisleLabel(code: string, name = ''): string {
+  if (name.trim() !== '') return name.trim();
+  const trimmed = String(code ?? '').trim();
+  if (trimmed === '') return '';
+  return /^[0-9]+([.\-][0-9a-z]+)?$/i.test(trimmed) ? `Aisle ${trimmed}` : trimmed;
+}
+
 /** Aisle codes are compared case- and whitespace-insensitively. */
 export function aisleKey(aisle: string): string {
   return String(aisle ?? '')
@@ -87,7 +101,7 @@ function groupNameFor(
 ): string {
   if (groupId === SHELF_ORDER_AISLE_ID) return 'In shelf order';
   if (groupId === UNKNOWN_AISLE_ID) return 'Location unknown — fix me';
-  return aisleNames.get(key) ?? `Aisle ${item.aisle}`;
+  return aisleNames.get(key) ?? aisleLabel(item.aisle);
 }
 
 function groupSequenceFor(groupId: string, aisle: string, order: Map<string, number>): number {
@@ -107,7 +121,7 @@ export interface BuildPickListInput {
 export function buildPickList({ lines, items, aisles }: BuildPickListInput): PickList {
   const order = aisleOrderMap(aisles);
   const aisleNames = new Map<string, string>();
-  for (const aisle of aisles) aisleNames.set(aisleKey(aisle.id), aisle.name || `Aisle ${aisle.id}`);
+  for (const aisle of aisles) aisleNames.set(aisleKey(aisle.id), aisleLabel(aisle.id, aisle.name));
 
   const needsAttention: PickEntry[] = [];
   const groups = new Map<string, PickGroup>();

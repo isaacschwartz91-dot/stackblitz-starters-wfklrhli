@@ -6,6 +6,7 @@ import { App } from './app/app';
 import { routes } from './app/routes';
 import { AuthService } from './app/core/auth.service';
 import { DataService } from './app/core/data.service';
+import { SheetSyncService } from './app/import/sheet-sync.service';
 
 bootstrapApplication(App, {
   providers: [
@@ -19,6 +20,13 @@ bootstrapApplication(App, {
     const auth = app.injector.get(AuthService);
     await data.load();
     await auth.restore();
+
+    // Linked spreadsheets are re-read in the background: the app is usable
+    // immediately, and refreshes itself a moment later if anything changed.
+    const settings = data.settings();
+    if (settings.autoSyncOnOpen && settings.linkedSheets.length > 0) {
+      void app.injector.get(SheetSyncService).syncAll();
+    }
   })
   .catch((error: unknown) => {
     console.error(error);

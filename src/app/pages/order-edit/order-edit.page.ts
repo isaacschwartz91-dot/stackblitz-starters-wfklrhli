@@ -19,7 +19,7 @@ import type { Customer, Item, Order, OrderLine } from '../../core/models';
 import { MATCH_SOURCE_LABEL, itemDetail } from '../../core/models';
 import type { Candidate } from '../../matching/matcher';
 import { splitOrderText } from '../../matching/parse-line';
-import { aisleKey } from '../../matching/pick-list';
+import { aisleKey, aisleLabel } from '../../matching/pick-list';
 import { ItemPicker } from '../../ui/item-picker';
 import { SelectValue } from '../../ui/select-value';
 
@@ -437,7 +437,7 @@ export class OrderEditPage {
     const item = this.itemFor(line);
     if (item === null || item.aisle.trim() === '') return '—';
     const aisle = this.data.aisles().find((entry) => aisleKey(entry.id) === aisleKey(item.aisle));
-    return aisle?.name !== undefined && aisle.name !== '' ? aisle.name : `Aisle ${item.aisle}`;
+    return aisleLabel(item.aisle, aisle?.name ?? '');
   }
 
   protected customerName(): string {

@@ -13,6 +13,7 @@ of these from **Catalog → Upload sheets**. They describe the same imaginary st
 | `sheet-a-alternate-column-names.xlsx` | A different store's export — `SKU`, `Description`, `Manufacturer`, `Pack Size`, `Aisle #`, `Shelf Seq`, `UOM`, `Retail`. Detected without any manual mapping. |
 | `sheet-b-option2-items-in-walking-order.xlsx` | Every item already in exact shelf order with a section column — upload it and the walk is set, with aisle headings. |
 | `shelf-order-one-sheet-no-aisles.xlsx` | The simplest sheet that works: one column of product names in the order they sit on the shelf. Nothing else, and nothing to configure — the pick list comes out as one continuous walk. |
+| `customers.xlsx` / `customers.csv` | A customer list — name, phone, email, delivery address and notes. Upload it from **Customers → Upload customer list**. |
 | `example-orders.txt` | Three orders as they really arrive — phoned in, forwarded by email, and typed in a hurry with typos. Paste one into **New order**. |
 
 ## Replacing these with your own

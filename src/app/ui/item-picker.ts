@@ -11,7 +11,7 @@ import { DataService } from '../core/data.service';
 import type { Item } from '../core/models';
 import { itemDetail } from '../core/models';
 import { searchItems } from '../matching/matcher';
-import { aisleKey } from '../matching/pick-list';
+import { aisleKey, aisleLabel } from '../matching/pick-list';
 
 @Component({
   selector: 'app-item-picker',
@@ -91,7 +91,7 @@ export class ItemPicker {
   protected where(item: Item): string {
     if (item.aisle.trim() === '') return 'No aisle';
     const named = this.data.aisles().find((aisle) => aisleKey(aisle.id) === aisleKey(item.aisle));
-    return named?.name !== undefined && named.name !== '' ? named.name : `Aisle ${item.aisle}`;
+    return aisleLabel(item.aisle, named?.name ?? '');
   }
 
   protected onInput(event: Event): void {

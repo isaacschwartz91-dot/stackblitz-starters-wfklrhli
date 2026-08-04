@@ -12,13 +12,16 @@ import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@a
 import { DataService, messageOf } from '../core/data.service';
 import { ToastService } from '../core/toast.service';
 import { SelectValue } from '../ui/select-value';
-import type { Aisle, Item } from '../core/models';
+import type { Aisle, Customer, Item } from '../core/models';
 import {
   AISLE_FIELD_LABELS,
+  CUSTOMER_FIELD_LABELS,
   ITEM_FIELD_LABELS,
   buildAisles,
+  buildCustomers,
   buildItems,
   guessAisleMapping,
+  guessCustomerMapping,
   guessItemMapping,
   guessSheetRole,
   readWorkbook,
@@ -79,14 +82,22 @@ interface SheetPlan {
               <label class="field" style="margin: 0; min-width: 190px">
                 <span>Treat this sheet as</span>
                 <select [selectValue]="plan.role" (change)="setRole(plan, value($event))">
-                  <option value="items">Master item list (Sheet A)</option>
-                  <option value="aisles">Aisle walking order (Sheet B)</option>
+                  <option value="items">Master item list (products)</option>
+                  <option value="aisles">Aisle walking order</option>
+                  <option value="customers">Customer list</option>
                   <option value="skip">Skip this sheet</option>
                 </select>
               </label>
             </div>
 
             @if (plan.role !== 'skip') {
+              @if (plan.role === 'customers') {
+                <div class="notice ok" style="margin: 0 0 0.6rem">
+                  Customers are matched by name (or by an ID column if the sheet has one), so
+                  re-uploading updates the people you already have instead of duplicating them.
+                  Their learned shorthand and past orders stay attached.
+                </div>
+              }
               @if (plan.role === 'items') {
                 <div class="notice ok" style="margin: 0 0 0.6rem">
                   {{ orderExplanation(plan) }}
@@ -198,7 +209,7 @@ export class SheetImport {
             fileName: workbook.fileName,
             table,
             role,
-            mapping: role === 'aisles' ? guessAisleMapping(table.headers) : guessItemMapping(table.headers),
+            mapping: this.mappingFor(role, table.headers),
             rowOrderIsWalkingOrder: false,
           });
         }
@@ -214,8 +225,19 @@ export class SheetImport {
   }
 
   protected fieldOptions(role: SheetRole): Array<{ key: string; label: string }> {
-    const labels = role === 'aisles' ? AISLE_FIELD_LABELS : ITEM_FIELD_LABELS;
+    const labels =
+      role === 'aisles'
+        ? AISLE_FIELD_LABELS
+        : role === 'customers'
+          ? CUSTOMER_FIELD_LABELS
+          : ITEM_FIELD_LABELS;
     return Object.entries(labels).map(([key, label]) => ({ key, label }));
+  }
+
+  private mappingFor(role: SheetRole, headers: string[]): SheetField[] {
+    if (role === 'aisles') return guessAisleMapping(headers);
+    if (role === 'customers') return guessCustomerMapping(headers);
+    return guessItemMapping(headers);
   }
 
   private update(plan: SheetPlan, patch: Partial<SheetPlan>): void {
@@ -224,13 +246,7 @@ export class SheetImport {
 
   protected setRole(plan: SheetPlan, role: string): void {
     const next = role as SheetRole;
-    this.update(plan, {
-      role: next,
-      mapping:
-        next === 'aisles'
-          ? guessAisleMapping(plan.table.headers)
-          : guessItemMapping(plan.table.headers),
-    });
+    this.update(plan, { role: next, mapping: this.mappingFor(next, plan.table.headers) });
   }
 
   protected setMapping(plan: SheetPlan, column: number, field: string): void {
@@ -277,6 +293,11 @@ export class SheetImport {
     if (plan.role === 'items') {
       return plan.mapping.includes('item_name') ? null : 'Choose which column holds the product name.';
     }
+    if (plan.role === 'customers') {
+      return plan.mapping.includes('customer_name')
+        ? null
+        : 'Choose which column holds the customer name.';
+    }
     return plan.mapping.includes('aisle') ? null : 'Choose which column holds the aisle code.';
   }
 
@@ -292,13 +313,16 @@ export class SheetImport {
   protected summary(): string {
     let items = 0;
     let aisles = 0;
+    let customers = 0;
     for (const plan of this.plans()) {
       if (plan.role === 'items') items += plan.table.rows.length;
       if (plan.role === 'aisles') aisles += plan.table.rows.length;
+      if (plan.role === 'customers') customers += plan.table.rows.length;
     }
     const parts: string[] = [];
     if (items > 0) parts.push(`${items} product rows`);
     if (aisles > 0) parts.push(`${aisles} aisle rows`);
+    if (customers > 0) parts.push(`${customers} customer rows`);
     return parts.length === 0 ? 'Nothing selected to import.' : `Ready to import ${parts.join(' and ')}.`;
   }
 
@@ -310,6 +334,7 @@ export class SheetImport {
     this.busy.set(true);
     try {
       const items: Item[] = [];
+      const customers: Customer[] = [];
       let aisles: Aisle[] | null = null;
       let derivedAisles: Aisle[] | null = null;
       let generatedIds = 0;
@@ -331,11 +356,17 @@ export class SheetImport {
           const result = buildAisles(plan.table, plan.mapping);
           aisles = [...(aisles ?? []), ...result.aisles];
           skipped += result.skipped;
+        } else if (plan.role === 'customers') {
+          const result = buildCustomers(plan.table, plan.mapping, this.data.customers());
+          customers.push(...result.customers);
+          skipped += result.skipped;
         }
       }
 
       const before = new Set(this.data.items().map((item) => item.id));
+      const customersBefore = new Set(this.data.customers().map((customer) => customer.id));
       if (items.length > 0) await this.data.saveItems(items);
+      if (customers.length > 0) await this.data.saveCustomers(customers);
 
       // An explicit Sheet B always wins over an order derived from row position.
       const finalAisles = aisles ?? derivedAisles;
@@ -347,11 +378,18 @@ export class SheetImport {
 
       const added = items.filter((item) => !before.has(item.id)).length;
       const updated = items.length - added;
+      const newCustomers = customers.filter((customer) => !customersBefore.has(customer.id)).length;
       const notes = [
         added > 0 ? `${added} new products` : '',
         updated > 0 ? `${updated} updated` : '',
+        newCustomers > 0 ? `${newCustomers} new customers` : '',
+        customers.length - newCustomers > 0 ? `${customers.length - newCustomers} customers updated` : '',
         finalAisles !== null && finalAisles.length > 0 ? `${finalAisles.length} aisles` : '',
-        usedRowOrder ? 'walk follows the sheet order' : 'walk follows the sequence column',
+        items.length > 0
+          ? usedRowOrder
+            ? 'walk follows the sheet order'
+            : 'walk follows the sequence column'
+          : '',
         skipped > 0 ? `${skipped} rows skipped` : '',
       ].filter((note) => note !== '');
 

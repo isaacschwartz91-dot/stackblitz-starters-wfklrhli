@@ -3,19 +3,22 @@
  */
 
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
-import { DecimalPipe } from '@angular/common';
+import { DatePipe, DecimalPipe } from '@angular/common';
 
 import { AuthService } from '../../core/auth.service';
 import { DataService, messageOf } from '../../core/data.service';
 import { SupabaseBackend, readStoredConfig, writeStoredConfig } from '../../core/supabase-backend';
 import { ToastService } from '../../core/toast.service';
-import type { AppSettings, Snapshot } from '../../core/models';
+import type { AppSettings, LinkedSheet, Snapshot } from '../../core/models';
+import { newId } from '../../core/ids';
+import { SheetSyncService } from '../../import/sheet-sync.service';
 import { demoSnapshot, DEMO_ORDER_TEXT } from '../../seed/demo-data';
+import { SelectValue } from '../../ui/select-value';
 
 @Component({
   selector: 'app-settings',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DecimalPipe],
+  imports: [DecimalPipe, DatePipe, SelectValue],
   template: `
     <div class="page">
       <div class="page-head">
@@ -186,6 +189,109 @@ import { demoSnapshot, DEMO_ORDER_TEXT } from '../../seed/demo-data';
           }
         </div>
 
+        <!-- Linked sheets --------------------------------------------------- -->
+        <div class="card">
+          <div class="card-head">
+            <h2>Sheets that update themselves</h2>
+            <span class="spacer"></span>
+            @if (sync.lastSyncAt()) {
+              <span class="chip">last read {{ sync.lastSyncAt() | date: 'd MMM, h:mm a' }}</span>
+            }
+          </div>
+          <p class="small muted">
+            Point the app at a spreadsheet that lives online and it re-reads it every time the app
+            opens — keep editing that one sheet and the software follows. Paste a Google Sheets
+            address (use <em>File → Share → Publish to web → CSV</em>), or any link that returns an
+            .xlsx or .csv file.
+          </p>
+
+          @for (link of draft().linkedSheets; track link.id) {
+            <div
+              class="card tight"
+              style="box-shadow: none; background: var(--surface-2); margin-bottom: 0.6rem"
+            >
+              <div class="inline-fields">
+                <label class="field" style="margin: 0; flex: 3 1 260px">
+                  <span>Link</span>
+                  <input
+                    type="url"
+                    placeholder="https://docs.google.com/spreadsheets/…"
+                    [value]="link.url"
+                    (input)="patchLink(link.id, { url: value($event) })"
+                  />
+                </label>
+                <label class="field" style="margin: 0">
+                  <span>Holds</span>
+                  <select
+                    [selectValue]="link.role"
+                    (change)="patchLink(link.id, { role: linkRole($event) })"
+                  >
+                    <option value="items">Products</option>
+                    <option value="aisles">Aisle walking order</option>
+                    <option value="customers">Customers</option>
+                  </select>
+                </label>
+              </div>
+              <div class="button-row">
+                @if (link.role === 'items') {
+                  <label class="check">
+                    <input
+                      type="checkbox"
+                      [checked]="link.retireMissing"
+                      (change)="patchLink(link.id, { retireMissing: !link.retireMissing })"
+                    />
+                    <span class="small">
+                      Hide products that have been taken off the sheet (orders keep them)
+                    </span>
+                  </label>
+                }
+                <span class="spacer"></span>
+                <button type="button" class="small danger" (click)="removeLink(link.id)">
+                  Remove
+                </button>
+              </div>
+            </div>
+          }
+
+          <div class="button-row">
+            <button type="button" (click)="addLink()">Add a sheet link</button>
+            <button
+              type="button"
+              class="primary"
+              (click)="syncNow()"
+              [disabled]="sync.syncing() || draft().linkedSheets.length === 0 || dirty()"
+            >
+              {{ sync.syncing() ? 'Reading…' : 'Read them now' }}
+            </button>
+          </div>
+          @if (dirty() && draft().linkedSheets.length > 0) {
+            <p class="small" style="color: var(--warn); margin: 0.5rem 0 0">
+              Save first, then read.
+            </p>
+          }
+
+          <label class="check" style="margin-top: 0.7rem">
+            <input
+              type="checkbox"
+              [checked]="draft().autoSyncOnOpen"
+              (change)="patch({ autoSyncOnOpen: !draft().autoSyncOnOpen })"
+            />
+            <span>Re-read them automatically whenever the app opens</span>
+          </label>
+
+          @for (outcome of sync.lastOutcomes(); track outcome.label) {
+            <div class="notice" [class.warn]="!outcome.ok" style="margin: 0.6rem 0 0">
+              <strong>{{ outcome.label }}:</strong> {{ outcome.message }}
+            </div>
+          }
+
+          <div class="button-row" style="margin-top: 0.8rem">
+            <button type="button" class="primary" (click)="saveSettings()" [disabled]="!dirty()">
+              Save
+            </button>
+          </div>
+        </div>
+
         <!-- Backup --------------------------------------------------------- -->
         <div class="card">
           <div class="card-head"><h2>Backup &amp; demo data</h2></div>
@@ -279,6 +385,8 @@ export class SettingsPage {
   protected readonly auth = inject(AuthService);
   private readonly toast = inject(ToastService);
 
+  protected readonly sync = inject(SheetSyncService);
+
   protected readonly draft = signal<AppSettings>({ ...this.data.settings() });
   protected readonly busy = signal(false);
   protected readonly storageMessage = signal('');
@@ -347,6 +455,42 @@ export class SettingsPage {
 
   protected patch(patch: Partial<AppSettings>): void {
     this.draft.set({ ...this.draft(), ...patch });
+  }
+
+  /* -------------------------------------------------------- linked sheets -- */
+
+  protected linkRole(event: Event): LinkedSheet['role'] {
+    return this.value(event) as LinkedSheet['role'];
+  }
+
+  protected addLink(): void {
+    const link: LinkedSheet = {
+      id: newId('link'),
+      url: '',
+      role: 'items',
+      label: '',
+      retireMissing: true,
+    };
+    this.patch({ linkedSheets: [...this.draft().linkedSheets, link] });
+  }
+
+  protected patchLink(id: string, patch: Partial<LinkedSheet>): void {
+    this.patch({
+      linkedSheets: this.draft().linkedSheets.map((link) =>
+        link.id === id ? { ...link, ...patch } : link,
+      ),
+    });
+  }
+
+  protected removeLink(id: string): void {
+    this.patch({ linkedSheets: this.draft().linkedSheets.filter((link) => link.id !== id) });
+  }
+
+  protected async syncNow(): Promise<void> {
+    const outcomes = await this.sync.syncAll();
+    const failed = outcomes.filter((outcome) => !outcome.ok).length;
+    if (failed === 0) this.toast.ok('Sheets read. Everything is up to date.');
+    else this.toast.warn(`${failed} of ${outcomes.length} links could not be read — see below.`);
   }
 
   protected setName(name: string): void {

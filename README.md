@@ -169,6 +169,43 @@ summary says exactly how many were added, updated and skipped.
 Ready-made examples of all of the above are in [`sample-data/`](sample-data/), including
 one workbook that deliberately uses a different store's column names.
 
+### Customers
+
+**Customers → Upload customer list** reads a customer sheet the same way. Only the name is
+required; `phone`, `email`, `address` and `notes` are all picked up when present, under
+whatever your own headers call them.
+
+| `name` | `phone` | `email` | `address` | `notes` |
+|---|---|---|---|---|
+| John Cohen | (555) 214-8890 | jcohen@example.com | 14 Elm Street, Apt 3 | Leave with the doorman |
+
+Re-uploading updates the people you already have rather than duplicating them: rows are
+tied to existing customers by an ID column if your sheet has one, and otherwise by name.
+That matters, because a customer's learned shorthand and their whole order history hang
+off their record — updating John Cohen's phone number must not create a second John Cohen.
+
+**Customers → Export CSV** writes the list back out, which doubles as a template.
+
+### Keeping a sheet and the app in step automatically
+
+If your spreadsheet lives online, the app can re-read it for you instead of waiting for an
+upload. **Settings → Sheets that update themselves** takes one or more links, each marked
+as products, walking order, or customers. They are re-read every time the app is opened,
+and on demand with **Read them now**. Edit the sheet, reload the app, and the change is
+there.
+
+For Google Sheets use **File → Share → Publish to web → CSV** and paste that address. A
+plain `docs.google.com/spreadsheets/…/edit` link is rewritten to its CSV export
+automatically, but Google only lets a browser fetch sheets that are actually published, so
+the published address is the reliable one. Any other link works too — OneDrive, Dropbox,
+your own server — as long as it returns `.xlsx` or `.csv` and permits cross-origin reads.
+If a link cannot be read, the screen says so and names the likely reason rather than
+failing quietly.
+
+For a linked products sheet, **"Hide products that have been taken off the sheet"** keeps
+the catalog honest: anything you delete from the sheet stops matching new orders, while
+past orders still show exactly what was picked. Nothing is ever deleted outright.
+
 ### Fixing things without a re-upload
 
 **Catalog** is a searchable, editable table — fix a typo or a wrong aisle in place, add a
@@ -295,6 +332,9 @@ duplicating the catalog.
 
 - **Automatic email intake.** Pasting a forwarded email works today; polling a dedicated
   inbox would need a small server-side job.
+- **Watching a spreadsheet on your own computer.** Linked sheets have to live at a URL —
+  a browser cannot re-read a file sitting on your desktop without you handing it over each
+  time. Put the sheet in Google Sheets, OneDrive or Dropbox and link it there.
 - **Multiple store locations / multiple shelf layouts.** The schema would need a store ID
   on `items`, `aisles` and `orders`.
 - **PDF export** is the browser's *Print → Save as PDF*, not a generated file.

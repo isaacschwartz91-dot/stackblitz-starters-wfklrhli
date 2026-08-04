@@ -4,7 +4,7 @@ import type { Aisle, Alias, Item, OrderLine } from '../core/models';
 import { buildMatchIndex, matchPhrase, searchItems } from './matcher';
 import { normalize } from './normalize';
 import { parseLine, splitOrderText } from './parse-line';
-import { buildPickList } from './pick-list';
+import { aisleLabel, buildPickList } from './pick-list';
 
 function item(partial: Partial<Item> & { id: string; name: string }): Item {
   return {
@@ -516,6 +516,24 @@ describe('buildPickList', () => {
     });
     expect(pickList.groups[0].aisleName).toBe('Produce');
     expect(pickList.groups[1].entries[0].item?.id).toBe('5001');
+  });
+});
+
+describe('aisleLabel', () => {
+  it('numbers a numeric aisle and leaves a named one alone', () => {
+    expect(aisleLabel('3')).toBe('Aisle 3');
+    expect(aisleLabel('12')).toBe('Aisle 12');
+    expect(aisleLabel('Household')).toBe('Household');
+    expect(aisleLabel('Dairy & Eggs')).toBe('Dairy & Eggs');
+  });
+
+  it('always prefers the name the store gave it', () => {
+    expect(aisleLabel('3', 'Dairy')).toBe('Dairy');
+    expect(aisleLabel('Household', 'Cleaning')).toBe('Cleaning');
+  });
+
+  it('is empty for no aisle at all', () => {
+    expect(aisleLabel('', '')).toBe('');
   });
 });
 

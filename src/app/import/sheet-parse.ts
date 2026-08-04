@@ -10,7 +10,7 @@
 import * as XLSX from 'xlsx';
 
 import { stableId } from '../core/ids';
-import type { Aisle, Item } from '../core/models';
+import type { Aisle, Customer, Item } from '../core/models';
 
 export type ItemField =
   | 'item_id'
@@ -26,7 +26,15 @@ export type ItemField =
 
 export type AisleField = 'sequence' | 'aisle' | 'aisle_name';
 
-export type SheetField = ItemField | AisleField | 'ignore';
+export type CustomerField =
+  | 'customer_id'
+  | 'customer_name'
+  | 'phone'
+  | 'email'
+  | 'address'
+  | 'customer_notes';
+
+export type SheetField = ItemField | AisleField | CustomerField | 'ignore';
 
 export interface SheetTable {
   name: string;
@@ -73,6 +81,44 @@ const ITEM_HEADER_SYNONYMS: Record<ItemField, string[]> = {
   unit: ['unit', 'uom', 'unitofmeasure', 'sellby'],
   price: ['price', 'retail', 'retailprice', 'unitprice', 'cost'],
   barcode: ['barcode', 'upc', 'ean', 'gtin', 'scancode'],
+};
+
+const CUSTOMER_HEADER_SYNONYMS: Record<CustomerField, string[]> = {
+  customer_id: ['customerid', 'id', 'accountnumber', 'account', 'accountno', 'customerno', 'code'],
+  customer_name: [
+    'customername',
+    'name',
+    'customer',
+    'client',
+    'clientname',
+    'contact',
+    'contactname',
+    'fullname',
+    'household',
+    'business',
+  ],
+  phone: ['phone', 'phonenumber', 'telephone', 'tel', 'mobile', 'cell', 'cellphone', 'contactnumber'],
+  email: ['email', 'emailaddress', 'mail', 'emailid'],
+  address: [
+    'address',
+    'deliveryaddress',
+    'streetaddress',
+    'street',
+    'addr',
+    'shipto',
+    'addressline1',
+  ],
+  customer_notes: [
+    'notes',
+    'note',
+    'comment',
+    'comments',
+    'remarks',
+    'instructions',
+    'deliverynotes',
+    'deliveryinstructions',
+    'specialinstructions',
+  ],
 };
 
 const AISLE_HEADER_SYNONYMS: Record<AisleField, string[]> = {
@@ -124,7 +170,11 @@ function findHeaderRow(rows: unknown[][]): number {
 }
 
 export async function readWorkbook(file: File): Promise<ParsedWorkbook> {
-  const buffer = await file.arrayBuffer();
+  return readWorkbookBuffer(await file.arrayBuffer(), file.name);
+}
+
+/** Same reader, for bytes that did not come from a file input — a URL, say. */
+export function readWorkbookBuffer(buffer: ArrayBuffer, fileName: string): ParsedWorkbook {
   const workbook = XLSX.read(buffer, { type: 'array', cellDates: true, raw: false });
 
   const tables: SheetTable[] = [];
@@ -153,69 +203,57 @@ export async function readWorkbook(file: File): Promise<ParsedWorkbook> {
     tables.push({ name, headers, rows });
   }
 
-  return { fileName: file.name, tables };
+  return { fileName, tables };
+}
+
+/**
+ * Map a sheet's headers onto a set of fields.
+ *
+ * Two passes: an exact synonym hit is taken everywhere it can be, and only
+ * then are looser substring matches considered, so "Item Name" can never be
+ * claimed by the `id` synonym list before `item_name` gets a look at it.
+ */
+function guessMapping(headers: string[], synonymsByField: Record<string, string[]>): SheetField[] {
+  const taken = new Set<string>();
+  const mapping: SheetField[] = headers.map(() => 'ignore');
+  const fields = Object.entries(synonymsByField);
+
+  for (const pass of [0, 1]) {
+    headers.forEach((header, column) => {
+      if (mapping[column] !== 'ignore') return;
+      const key = headerKey(header);
+      if (key === '') return;
+      for (const [field, synonyms] of fields) {
+        if (taken.has(field)) continue;
+        const hit =
+          pass === 0
+            ? synonyms.includes(key)
+            : synonyms.some((synonym) => key.includes(synonym) || synonym.includes(key));
+        if (hit) {
+          mapping[column] = field as SheetField;
+          taken.add(field);
+          return;
+        }
+      }
+    });
+  }
+  return mapping;
 }
 
 /** Best-guess mapping from a sheet's headers to item fields. */
 export function guessItemMapping(headers: string[]): SheetField[] {
-  const taken = new Set<SheetField>();
-  const mapping: SheetField[] = headers.map(() => 'ignore');
-
-  // Two passes so an exact synonym hit always beats a looser one.
-  for (const pass of [0, 1]) {
-    headers.forEach((header, column) => {
-      if (mapping[column] !== 'ignore') return;
-      const key = headerKey(header);
-      if (key === '') return;
-      for (const [field, synonyms] of Object.entries(ITEM_HEADER_SYNONYMS) as [
-        ItemField,
-        string[],
-      ][]) {
-        if (taken.has(field)) continue;
-        const hit =
-          pass === 0
-            ? synonyms.includes(key)
-            : synonyms.some((synonym) => key.includes(synonym) || synonym.includes(key));
-        if (hit) {
-          mapping[column] = field;
-          taken.add(field);
-          return;
-        }
-      }
-    });
-  }
-  return mapping;
+  return guessMapping(headers, ITEM_HEADER_SYNONYMS);
 }
 
 export function guessAisleMapping(headers: string[]): SheetField[] {
-  const taken = new Set<SheetField>();
-  const mapping: SheetField[] = headers.map(() => 'ignore');
-  for (const pass of [0, 1]) {
-    headers.forEach((header, column) => {
-      if (mapping[column] !== 'ignore') return;
-      const key = headerKey(header);
-      if (key === '') return;
-      for (const [field, synonyms] of Object.entries(AISLE_HEADER_SYNONYMS) as [
-        AisleField,
-        string[],
-      ][]) {
-        if (taken.has(field)) continue;
-        const hit =
-          pass === 0
-            ? synonyms.includes(key)
-            : synonyms.some((synonym) => key.includes(synonym) || synonym.includes(key));
-        if (hit) {
-          mapping[column] = field;
-          taken.add(field);
-          return;
-        }
-      }
-    });
-  }
-  return mapping;
+  return guessMapping(headers, AISLE_HEADER_SYNONYMS);
 }
 
-export type SheetRole = 'items' | 'aisles' | 'skip';
+export function guessCustomerMapping(headers: string[]): SheetField[] {
+  return guessMapping(headers, CUSTOMER_HEADER_SYNONYMS);
+}
+
+export type SheetRole = 'items' | 'aisles' | 'customers' | 'skip';
 
 /**
  * Guess what a sheet is for.
@@ -225,6 +263,19 @@ export type SheetRole = 'items' | 'aisles' | 'skip';
  */
 export function guessSheetRole(table: SheetTable): SheetRole {
   if (table.rows.length === 0) return 'skip';
+
+  // A phone or email column is only ever a customer list, and a tab actually
+  // named "Customers" settles it outright.
+  const customerMapping = guessCustomerMapping(table.headers);
+  const customerFields = new Set(customerMapping.filter((field) => field !== 'ignore'));
+  const namedForCustomers = /customer|client|account/i.test(table.name);
+  if (
+    customerFields.has('customer_name') &&
+    (customerFields.has('phone') || customerFields.has('email') || namedForCustomers)
+  ) {
+    return 'customers';
+  }
+
   const itemMapping = guessItemMapping(table.headers);
   const aisleMapping = guessAisleMapping(table.headers);
   const aisleFields = new Set(aisleMapping.filter((field) => field !== 'ignore'));
@@ -392,6 +443,81 @@ export function buildAisles(table: SheetTable, mapping: SheetField[]): AisleImpo
     skipped,
   };
 }
+
+export interface CustomerImportResult {
+  customers: Customer[];
+  skipped: number;
+  /** How many rows matched a customer the store already had. */
+  matchedExisting: number;
+}
+
+/**
+ * Read a customer list.
+ *
+ * Ids matter here: a customer's learned shorthand and their order history hang
+ * off theirs. So a row is tied to an existing customer by its id column when
+ * there is one, and otherwise by name — which is what "update John Cohen's
+ * phone number" means to the person editing the sheet.
+ */
+export function buildCustomers(
+  table: SheetTable,
+  mapping: SheetField[],
+  existing: Customer[] = [],
+): CustomerImportResult {
+  const columnOf = (field: SheetField): number => mapping.indexOf(field);
+  const nameColumn = columnOf('customer_name');
+  const idColumn = columnOf('customer_id');
+
+  const idByName = new Map<string, string>();
+  for (const customer of existing) {
+    const key = customer.name.trim().toLowerCase();
+    if (key !== '' && !idByName.has(key)) idByName.set(key, customer.id);
+  }
+  const byId = new Map(existing.map((customer) => [customer.id, customer]));
+
+  const customers: Customer[] = [];
+  const seen = new Set<string>();
+  let skipped = 0;
+  let matchedExisting = 0;
+
+  table.rows.forEach((row, rowIndex) => {
+    const cell = (column: number): string => (column < 0 ? '' : (row[column] ?? '').trim());
+    const name = cell(nameColumn);
+    if (name === '') {
+      skipped += 1;
+      return;
+    }
+
+    const explicitId = cell(idColumn);
+    const knownId = idByName.get(name.toLowerCase());
+    let id = explicitId !== '' ? explicitId : (knownId ?? stableId('customer', name));
+    if (explicitId !== '' || knownId !== undefined) matchedExisting += 1;
+    if (seen.has(id)) id = stableId('customer', name, String(rowIndex));
+    seen.add(id);
+
+    customers.push({
+      id,
+      name,
+      phone: cell(columnOf('phone')),
+      email: cell(columnOf('email')),
+      address: cell(columnOf('address')),
+      notes: cell(columnOf('customer_notes')),
+      createdAt: byId.get(id)?.createdAt ?? new Date().toISOString(),
+    });
+  });
+
+  return { customers, skipped, matchedExisting };
+}
+
+export const CUSTOMER_FIELD_LABELS: Record<CustomerField | 'ignore', string> = {
+  customer_id: 'Customer ID',
+  customer_name: 'Customer name',
+  phone: 'Phone',
+  email: 'Email',
+  address: 'Delivery address',
+  customer_notes: 'Notes',
+  ignore: "Don't import",
+};
 
 export const ITEM_FIELD_LABELS: Record<ItemField | 'ignore', string> = {
   item_id: 'Item ID',

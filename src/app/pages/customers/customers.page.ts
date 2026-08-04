@@ -5,11 +5,12 @@ import { DataService, messageOf } from '../../core/data.service';
 import { ToastService } from '../../core/toast.service';
 import { newId } from '../../core/ids';
 import type { Customer } from '../../core/models';
+import { SheetImport } from '../../import/sheet-import';
 
 @Component({
   selector: 'app-customers',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink],
+  imports: [RouterLink, SheetImport],
   template: `
     <div class="page">
       <div class="page-head">
@@ -20,8 +21,20 @@ import type { Customer } from '../../core/models';
           </p>
         </div>
         <span class="spacer"></span>
-        <button type="button" class="primary" (click)="startNew()">Add customer</button>
+        <div class="button-row">
+          <button type="button" (click)="exportCsv()" [disabled]="data.customers().length === 0">
+            Export CSV
+          </button>
+          <button type="button" (click)="showImport.set(!showImport())">
+            {{ showImport() ? 'Hide upload' : 'Upload customer list' }}
+          </button>
+          <button type="button" class="primary" (click)="startNew()">Add customer</button>
+        </div>
       </div>
+
+      @if (showImport() || data.customers().length === 0) {
+        <div style="margin-bottom: 1rem"><app-sheet-import /></div>
+      }
 
       <div class="card" style="margin-bottom: 1rem">
         <label class="field" style="margin: 0">
@@ -148,6 +161,7 @@ export class CustomersPage {
   private readonly toast = inject(ToastService);
 
   protected readonly query = signal('');
+  protected readonly showImport = signal(false);
   protected readonly editing = signal<Customer | null>(null);
   protected readonly isNew = signal(false);
 
@@ -209,6 +223,30 @@ export class CustomersPage {
     } catch (cause) {
       this.toast.error(messageOf(cause));
     }
+  }
+
+  /** A CSV of the customer list — a backup, and a template to edit and re-upload. */
+  protected exportCsv(): void {
+    const header = ['customer_id', 'customer_name', 'phone', 'email', 'address', 'notes'];
+    const rows = this.data
+      .customers()
+      .map((customer) => [
+        customer.id,
+        customer.name,
+        customer.phone,
+        customer.email,
+        customer.address,
+        customer.notes,
+      ]);
+    const csv = [header, ...rows]
+      .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'customers.csv';
+    link.click();
+    URL.revokeObjectURL(url);
   }
 
   protected async remove(customer: Customer): Promise<void> {
