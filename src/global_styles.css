@@ -38,8 +38,15 @@
   color-scheme: light dark;
 }
 
+/*
+ * Themes are token-only: nothing below this point styles a component inside a
+ * media query. The operating system's preference sets the default, and an
+ * explicit choice — a host that stamps data-theme on the root, or a future
+ * in-app toggle — outranks it in both directions.
+ */
 @media (prefers-color-scheme: dark) {
   :root {
+    color-scheme: dark;
     --bg: #121714;
     --surface: #1a211d;
     --surface-2: #212a25;
@@ -58,6 +65,48 @@
     --ok-soft: #14261c;
     --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 14px rgba(0, 0, 0, 0.3);
   }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #121714;
+  --surface: #1a211d;
+  --surface-2: #212a25;
+  --ink: #e8efea;
+  --ink-2: #adbab2;
+  --ink-3: #7d8b83;
+  --line: #2c3630;
+  --line-strong: #3d4a43;
+  --accent: #4bbd81;
+  --accent-ink: #06180e;
+  --warn: #e8a33d;
+  --warn-soft: #2e2415;
+  --danger: #f2857c;
+  --danger-soft: #2e1917;
+  --ok: #4bbd81;
+  --ok-soft: #14261c;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 14px rgba(0, 0, 0, 0.3);
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+  --bg: #f6f7f5;
+  --surface: #ffffff;
+  --surface-2: #f0f2ef;
+  --ink: #16201b;
+  --ink-2: #4a574f;
+  --ink-3: #7b8880;
+  --line: #dfe4e0;
+  --line-strong: #c3ccc6;
+  --accent: #1f7a4d;
+  --accent-ink: #ffffff;
+  --warn: #b26a00;
+  --warn-soft: #fdf3e2;
+  --danger: #b3261e;
+  --danger-soft: #fdeceb;
+  --ok: #1f7a4d;
+  --ok-soft: #e7f4ed;
+  --shadow: 0 1px 2px rgba(16, 32, 24, 0.06), 0 4px 14px rgba(16, 32, 24, 0.05);
 }
 
 * {
