@@ -288,11 +288,28 @@ export function guessSheetRole(table: SheetTable): SheetRole {
   if (!aisleFields.has('aisle')) return hasProductName ? 'items' : 'skip';
   if (!hasProductName) return 'aisles';
 
-  // Both readings fit. A short sheet with few rows is a walking order, not a
-  // catalog — and the import screen lets a human overrule this either way.
+  // Both readings fit — the sheet has an aisle column and something that could
+  // be a name. What settles it is the aisle column itself: a walking order
+  // lists each aisle once, while a catalog puts many products in the same
+  // aisle. Brands, sizes, prices and codes only ever belong to a catalog.
+  if (/aisle|walk|shelf|section|layout|route/i.test(table.name)) return 'aisles';
+
+  const catalogOnly: ItemField[] = ['brand', 'size', 'price', 'barcode', 'unit', 'item_id'];
+  if (catalogOnly.some((field) => itemMapping.includes(field))) return 'items';
+
   const columns = table.headers.filter((header) => header.trim() !== '').length;
-  const compact = columns <= 3 && table.rows.length <= 60 && aisleFields.has('sequence');
-  return compact ? 'aisles' : 'items';
+  if (columns > 4) return 'items';
+
+  const aisleColumn = aisleMapping.indexOf('aisle');
+  const values = table.rows
+    .map((row) => (row[aisleColumn] ?? '').trim())
+    .filter((value) => value !== '');
+  // An aisle column with nothing in it is a broken walking order, not a
+  // product list. Reading it as one would quietly file aisle names in the
+  // catalog; calling it a walking order surfaces the real problem instead.
+  if (values.length === 0) return 'aisles';
+
+  return new Set(values).size === values.length ? 'aisles' : 'items';
 }
 
 function toNumber(value: string): number | null {

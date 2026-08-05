@@ -326,6 +326,26 @@ export class SheetImport {
     return parts.length === 0 ? 'Nothing selected to import.' : `Ready to import ${parts.join(' and ')}.`;
   }
 
+  /** Why an import produced nothing, in words the person can act on. */
+  private nothingSavedReason(): string {
+    const active = this.plans().filter((plan) => plan.role !== 'skip');
+    if (active.length === 0) return 'Nothing was saved — every sheet is set to "Skip this sheet".';
+
+    const blocked = active.find((plan) => this.planProblem(plan) !== null);
+    if (blocked !== undefined) {
+      return `Nothing was saved — ${this.planProblem(blocked)}`;
+    }
+
+    const empty = active.find((plan) => plan.table.rows.length === 0);
+    if (empty !== undefined) return 'Nothing was saved — that sheet has a header row but no data.';
+
+    const aisleSheet = active.find((plan) => plan.role === 'aisles');
+    if (aisleSheet !== undefined) {
+      return 'Nothing was saved — no row had an aisle code in the column marked "Aisle code". Check that column is pointing at the right one.';
+    }
+    return 'Nothing was saved — no usable rows were found. Check the column assignments above.';
+  }
+
   protected reset(): void {
     this.plans.set([]);
   }
@@ -379,12 +399,22 @@ export class SheetImport {
       const added = items.filter((item) => !before.has(item.id)).length;
       const updated = items.length - added;
       const newCustomers = customers.filter((customer) => !customersBefore.has(customer.id)).length;
+      const savedAisles = finalAisles !== null && finalAisles.length > 0 ? finalAisles.length : 0;
+
+      // Reporting success when nothing reached storage is the worst thing this
+      // screen can do — it sends someone hunting through their database for
+      // rows that were never written. Say so instead, and say why.
+      if (items.length === 0 && customers.length === 0 && savedAisles === 0) {
+        this.toast.warn(this.nothingSavedReason());
+        return;
+      }
+
       const notes = [
         added > 0 ? `${added} new products` : '',
         updated > 0 ? `${updated} updated` : '',
         newCustomers > 0 ? `${newCustomers} new customers` : '',
         customers.length - newCustomers > 0 ? `${customers.length - newCustomers} customers updated` : '',
-        finalAisles !== null && finalAisles.length > 0 ? `${finalAisles.length} aisles` : '',
+        savedAisles > 0 ? `${savedAisles} aisles` : '',
         items.length > 0
           ? usedRowOrder
             ? 'walk follows the sheet order'

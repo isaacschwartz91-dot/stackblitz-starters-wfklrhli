@@ -134,6 +134,52 @@ describe('guessSheetRole', () => {
     ).toBe('items');
   });
 
+  it('spots a walking order however its columns are headed', () => {
+    // Each of these was previously read as a product list, so the rows went
+    // into the catalog and the walking order stayed empty.
+    const shapes: Array<[string[], string[][]]> = [
+      [['Aisle', 'Name'], [['1', 'Produce'], ['2', 'Bakery']]],
+      [['Aisle Number', 'Description'], [['1', 'Produce'], ['2', 'Bakery']]],
+      [['Order', 'Aisle', 'Name', 'Notes'], [['1', '1', 'Produce', 'x'], ['2', '2', 'Bakery', 'y']]],
+      [['Aisle', 'Aisle Name'], [['1', 'Produce'], ['2', 'Bakery']]],
+    ];
+    for (const [headers, rows] of shapes) {
+      expect(guessSheetRole(table(headers, rows)), headers.join('|')).toBe('aisles');
+    }
+  });
+
+  it('reads a long walking order as a walking order, not a catalog', () => {
+    const rows = Array.from({ length: 70 }, (_, index) => [String(index + 1), `Aisle ${index + 1}`]);
+    expect(guessSheetRole(table(['Aisle', 'Name'], rows))).toBe('aisles');
+  });
+
+  it('still reads products in shelf order as products', () => {
+    // The same two columns, but each aisle holds many products — that is a
+    // catalog, and misreading it would wipe the walking order.
+    const rows = Array.from({ length: 75 }, (_, index) => [
+      `Product ${index}`,
+      `Aisle ${(index % 8) + 1}`,
+    ]);
+    expect(guessSheetRole(table(['item_name', 'aisle'], rows))).toBe('items');
+  });
+
+  it('treats anything carrying brands or prices as a catalog', () => {
+    expect(
+      guessSheetRole(table(['Aisle', 'Name', 'Price'], [['1', 'Milk', '2.99'], ['2', 'Bread', '3.50']])),
+    ).toBe('items');
+  });
+
+  it('trusts a tab named for the walking order', () => {
+    expect(
+      guessSheetRole(table(['Code', 'Description'], [['1', 'Produce'], ['2', 'Bakery']], 'Walking Order')),
+    ).toBe('aisles');
+  });
+
+  it('calls an aisle sheet with no codes filled in a walking order, not a catalog', () => {
+    // Otherwise the aisle names get quietly filed as products.
+    expect(guessSheetRole(table(['Aisle', 'Name'], [['', 'Produce'], ['', 'Bakery']]))).toBe('aisles');
+  });
+
   it('skips a sheet with nothing recognisable', () => {
     expect(guessSheetRole(table(['foo', 'bar'], [['1', '2']]))).toBe('skip');
   });
