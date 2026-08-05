@@ -1,7 +1,22 @@
-[build]
-command = "npx ng build"
-publish = "dist/demo/browser"
+# Netlify build settings.
+#
+# If the site is connected to a Git repository, check three things in the
+# Netlify UI as well — this file cannot set them:
+#   1. Repository: the one that actually holds this code.
+#   2. Branch to deploy: the branch the code is on, not necessarily "main".
+#   3. Base directory: empty, unless the app lives in a sub-folder.
+# A deploy that finishes in under ten seconds did not run this build.
 
+[build]
+  command = "npm ci && npm run build"
+  publish = "dist/demo/browser"
+
+[build.environment]
+  # Angular 21 refuses to build on older Node.
+  NODE_VERSION = "22"
+
+# Every address is handed to index.html so the router can resolve it; without
+# this, refreshing on /catalog returns 404 even though the site is fine.
 [[redirects]]
   from = "/*"
   to = "/index.html"

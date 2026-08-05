@@ -12,6 +12,7 @@ import { Injectable, computed, signal } from '@angular/core';
 import type { Backend } from './backend';
 import { LocalBackend } from './local-backend';
 import { SupabaseBackend, readStoredConfig } from './supabase-backend';
+import { runtimeConfig } from './runtime-config';
 import { newId } from './ids';
 import type {
   AppSettings,
@@ -39,7 +40,9 @@ export class DataService {
   readonly aliases = signal<Alias[]>([]);
   readonly orders = signal<Order[]>([]);
   readonly orderLines = signal<OrderLine[]>([]);
-  readonly settings = signal<AppSettings>(DEFAULT_SETTINGS);
+  // Seeded from the deploy so the login screen carries the store's name even
+  // before any data has loaded.
+  readonly settings = signal<AppSettings>(deployedDefaults());
 
   readonly loading = signal(true);
   readonly error = signal<string>('');
@@ -100,6 +103,12 @@ export class DataService {
   }
 
   private apply(snapshot: Snapshot): void {
+    // A store name set at deploy time seeds the app, but never overwrites one
+    // an admin has since typed in.
+    const deployedName = runtimeConfig()?.storeName ?? '';
+    if (deployedName !== '' && (snapshot.settings.storeName || DEFAULT_SETTINGS.storeName) === DEFAULT_SETTINGS.storeName) {
+      snapshot = { ...snapshot, settings: { ...snapshot.settings, storeName: deployedName } };
+    }
     this.items.set(snapshot.items);
     this.aisles.set(snapshot.aisles);
     this.customers.set(snapshot.customers);
@@ -376,6 +385,11 @@ export class DataService {
       settings: this.settings(),
     });
   }
+}
+
+function deployedDefaults(): AppSettings {
+  const name = runtimeConfig()?.storeName ?? '';
+  return name === '' ? DEFAULT_SETTINGS : { ...DEFAULT_SETTINGS, storeName: name };
 }
 
 /** Supabase when it has been configured, otherwise this browser. */

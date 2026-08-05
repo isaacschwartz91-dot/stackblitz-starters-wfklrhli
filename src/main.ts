@@ -7,6 +7,10 @@ import { routes } from './app/routes';
 import { AuthService } from './app/core/auth.service';
 import { DataService } from './app/core/data.service';
 import { SheetSyncService } from './app/import/sheet-sync.service';
+import { loadRuntimeConfig } from './app/core/runtime-config';
+
+// Deploy-time settings first: the storage backend is chosen from them.
+await loadRuntimeConfig();
 
 bootstrapApplication(App, {
   providers: [

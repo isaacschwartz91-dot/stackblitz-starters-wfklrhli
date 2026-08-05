@@ -23,6 +23,7 @@ import type {
   User,
 } from './models';
 import { DEFAULT_SETTINGS } from './models';
+import { runtimeSupabase } from './runtime-config';
 
 export interface SupabaseConfig {
   url: string;
@@ -31,6 +32,7 @@ export interface SupabaseConfig {
 
 const SESSION_KEY = 'grocery-picker.supabase-session';
 const CONFIG_KEY = 'grocery-picker.supabase-config';
+const DISCONNECTED_KEY = 'grocery-picker.supabase-disconnected';
 
 interface StoredSession {
   accessToken: string;
@@ -39,25 +41,54 @@ interface StoredSession {
   user: User;
 }
 
+/**
+ * The Supabase project this browser should use.
+ *
+ * A setting made on this device wins over the one baked into the deploy, in
+ * both directions — including a deliberate disconnect, which must not be
+ * quietly undone by the deployed config on the next reload.
+ */
 export function readStoredConfig(): SupabaseConfig | null {
+  if (isDisconnectedHere()) return null;
   try {
     const raw = localStorage.getItem(CONFIG_KEY);
-    if (raw === null) return null;
-    const parsed = JSON.parse(raw) as Partial<SupabaseConfig>;
-    if (typeof parsed.url !== 'string' || typeof parsed.anonKey !== 'string') return null;
-    if (parsed.url.trim() === '' || parsed.anonKey.trim() === '') return null;
-    return { url: parsed.url.replace(/\/+$/, ''), anonKey: parsed.anonKey };
+    if (raw !== null) {
+      const parsed = JSON.parse(raw) as Partial<SupabaseConfig>;
+      if (
+        typeof parsed.url === 'string' &&
+        typeof parsed.anonKey === 'string' &&
+        parsed.url.trim() !== '' &&
+        parsed.anonKey.trim() !== ''
+      ) {
+        return { url: parsed.url.replace(/\/+$/, ''), anonKey: parsed.anonKey };
+      }
+    }
   } catch {
-    return null;
+    // Fall through to whatever the deploy configured.
   }
+  const deployed = runtimeSupabase();
+  return deployed === null ? null : { url: deployed.url, anonKey: deployed.anonKey };
+}
+
+/** True when someone on this device chose browser storage on purpose. */
+export function isDisconnectedHere(): boolean {
+  return localStorage.getItem(DISCONNECTED_KEY) === 'yes';
+}
+
+/** True when the connection came from the deploy rather than from this device. */
+export function isConfiguredByDeploy(): boolean {
+  return !isDisconnectedHere() && localStorage.getItem(CONFIG_KEY) === null && runtimeSupabase() !== null;
 }
 
 export function writeStoredConfig(config: SupabaseConfig | null): void {
   if (config === null) {
     localStorage.removeItem(CONFIG_KEY);
     localStorage.removeItem(SESSION_KEY);
+    // Remember the choice, so a deployed config does not override it.
+    if (runtimeSupabase() !== null) localStorage.setItem(DISCONNECTED_KEY, 'yes');
     return;
   }
+  localStorage.removeItem(DISCONNECTED_KEY);
   localStorage.setItem(
     CONFIG_KEY,
     JSON.stringify({ url: config.url.replace(/\/+$/, ''), anonKey: config.anonKey }),

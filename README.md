@@ -279,6 +279,41 @@ Supabase, then restore.
 
 ## Deploying
 
+### Connecting Supabase at deploy time
+
+Set these in the host's environment settings (Netlify: **Site configuration →
+Environment variables**) and every device that opens the site is connected already, with
+nothing to type in:
+
+| Variable | |
+|---|---|
+| `SUPABASE_URL` | also accepted as `VITE_SUPABASE_URL` |
+| `SUPABASE_ANON_KEY` | also accepted as `VITE_SUPABASE_ANON_KEY`. The **anon public** key — never the service-role key |
+| `STORE_NAME` | optional; names the app and its login screen |
+
+The build turns them into a `config.json` published next to the app, which the app reads
+at start-up. Anyone can still override it on their own device from Settings, in either
+direction, and that choice sticks.
+
+### If the deployed site shows "Page not found"
+
+The build succeeding and the site 404ing at the same time almost always means the host
+published a folder with no `index.html` in it. Check, in this order:
+
+1. **Which repository and branch the site is building.** A site pointed at a repository
+   that does not hold this code, or at a branch that does not have it, builds something
+   else entirely — or nothing.
+2. **The deploy took under ten seconds.** A real build here takes roughly 15–30 seconds.
+   Anything much faster did not run one, so the publish directory never appeared.
+3. **Base directory.** Leave it empty unless the app genuinely lives in a sub-folder.
+4. **Publish directory** is `dist/demo/browser` — the `browser` part matters. Angular's
+   application builder puts the site one level below the `outputPath` in `angular.json`.
+
+`netlify.toml` in this repository already sets the build command, the publish directory,
+the Node version and the SPA redirect, so a correctly connected site needs no settings in
+the host's UI at all.
+
+
 The build is a static site, so any static host works. `netlify.toml` is already set up:
 
 ```toml

@@ -4,9 +4,10 @@
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
-    "build": "ng build",
+    "build": "node scripts/write-config.mjs && ng build",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "prestart": "node scripts/write-config.mjs"
   },
   "dependencies": {
     "@angular/common": "^21.1.0",
