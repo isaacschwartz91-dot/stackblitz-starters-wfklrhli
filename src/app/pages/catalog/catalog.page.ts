@@ -91,6 +91,13 @@ const PAGE_SIZE = 60;
         </div>
       </div>
 
+      @if (filtered().length > 0 && isFiltered()) {
+        <p class="small dim" style="margin: -0.4rem 0 0.6rem">
+          {{ filtered().length }} of {{ data.items().length }} products match. Showing
+          {{ visible().length }}.
+        </p>
+      }
+
       @if (filtered().length === 0) {
         <div class="card empty">
           <h3>No products{{ data.items().length === 0 ? ' yet' : ' match' }}</h3>
@@ -275,11 +282,13 @@ export class CatalogPage {
     const department = this.departmentFilter();
 
     // Free-text search runs through the same matcher the order screen uses, so
-    // what staff find here is what an order line would find.
+    // what staff find here is what an order line would find. No cap: searching
+    // a 9,000-product catalog for "milk" has to return every milk, and the
+    // table below pages through them 60 at a time.
     let pool: Item[] =
       text === ''
         ? this.data.items()
-        : searchItems(this.data.matchIndex(), text, 500).map((candidate) => candidate.item);
+        : searchItems(this.data.matchIndex(), text).map((candidate) => candidate.item);
 
     if (text !== '') {
       const loose = text.toLowerCase();
@@ -308,6 +317,12 @@ export class CatalogPage {
   });
 
   protected readonly visible = computed(() => this.filtered().slice(0, this.limit()));
+
+  /** True when a search or filter is narrowing the list, so a count is worth showing. */
+  protected readonly isFiltered = computed(
+    () =>
+      this.query().trim() !== '' || this.aisleFilter() !== '' || this.departmentFilter() !== '',
+  );
 
   protected value(event: Event): string {
     return (event.target as HTMLInputElement).value;

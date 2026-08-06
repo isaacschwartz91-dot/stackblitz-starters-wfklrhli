@@ -555,4 +555,59 @@ describe('searchItems', () => {
   it('returns nothing for an empty query', () => {
     expect(searchItems(index, '   ')).toEqual([]);
   });
+
+  it('finds a product from two typed letters', () => {
+    const ids = searchItems(index, 'mi').map((candidate) => candidate.item.id);
+    expect(ids).toContain('1042');
+    expect(ids).toContain('1043');
+  });
+});
+
+/**
+ * A real store uploaded 9,420 products and searched "milk". Search has to
+ * return every one of them: quietly capping the result set is how staff end up
+ * believing a product is not in the catalog when it is on the next shelf.
+ */
+describe('searchItems at catalog scale', () => {
+  const BIG: Item[] = [];
+  for (let i = 0; i < 9420; i += 1) {
+    // Every 9th product is a milk, giving well over a thousand matches — far
+    // past any candidate cap the matcher applies when resolving one order line.
+    const isMilk = i % 9 === 0;
+    BIG.push(
+      item({
+        id: `sku-${i}`,
+        name: isMilk ? `Milk Variety ${i}` : `Bread Variety ${i}`,
+        brand: i % 50 === 0 ? 'Milkhouse Creamery' : 'Store Brand',
+        size: i % 70 === 0 ? 'Milk Crate 4 pack' : '1 lb',
+        aisle: String((i % 20) + 1),
+      }),
+    );
+  }
+  const big = buildMatchIndex(BIG, []);
+  const expected = BIG.filter((entry) =>
+    `${entry.name} ${entry.brand} ${entry.size}`.toLowerCase().includes('milk'),
+  ).length;
+
+  it('returns every match, not a truncated sample', () => {
+    expect(expected).toBeGreaterThan(1000);
+    expect(searchItems(big, 'milk')).toHaveLength(expected);
+  });
+
+  it('matches on brand and size, not just the product name', () => {
+    const ids = new Set(searchItems(big, 'milk').map((candidate) => candidate.item.id));
+    // Named "Bread…", so only its brand or size can have earned the match.
+    expect(ids.has('sku-50')).toBe(true);
+    expect(ids.has('sku-70')).toBe(true);
+  });
+
+  it('trims only the returned rows when a caller asks for a fixed number', () => {
+    expect(searchItems(big, 'milk', 10)).toHaveLength(10);
+    expect(searchItems(big, 'milk', 500)).toHaveLength(500);
+  });
+
+  it('still resolves an order line against the same catalog', () => {
+    const result = matchPhrase(big, 'milk variety 27');
+    expect(result.itemId).toBe('sku-27');
+  });
 });

@@ -85,8 +85,10 @@ export function tokenCoverage(queryTokens: string[], candidateTokens: string[]):
         break;
       }
       // A prefix hit is worth more the more of the word it covers, so "banan"
-      // beats "egg" (as in eggplant) at standing in for the whole token.
-      if (queryToken.length >= 3 && candidateToken.startsWith(queryToken)) {
+      // beats "egg" (as in eggplant) at standing in for the whole token. Two
+      // letters is enough to be worth something: a type-ahead has to say
+      // "milk" to someone who has only typed "mi".
+      if (queryToken.length >= 2 && candidateToken.startsWith(queryToken)) {
         best = Math.max(best, 0.72 + 0.28 * (queryToken.length / candidateToken.length));
         continue;
       }

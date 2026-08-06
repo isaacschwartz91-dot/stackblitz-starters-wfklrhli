@@ -57,7 +57,12 @@ export interface MatchOptions {
 
 const DEFAULT_AUTO_ACCEPT = 0.86;
 const DEFAULT_REVIEW_FLOOR = 0.42;
-const MAX_SCORED_CANDIDATES = 400;
+/**
+ * How many candidates get scored when resolving one order line. Matching only
+ * needs the best answer, so a bound here keeps a long order fast. Search passes
+ * no bound at all — see `shortlist`.
+ */
+const MATCH_CANDIDATE_CAP = 400;
 
 function pushInto<K, V>(map: Map<K, V[]>, key: K, value: V): void {
   const existing = map.get(key);
@@ -113,8 +118,15 @@ export function buildMatchIndex(items: Item[], aliases: Alias[]): MatchIndex {
   return index;
 }
 
-/** Shortlist items that share at least one token with the query. */
-function shortlist(index: MatchIndex, queryTokens: string[]): Item[] {
+/**
+ * Shortlist items that share at least one token with the query.
+ *
+ * `cap` bounds how many are scored. Matching an order line passes one, because
+ * it only ever needs the winner. Search passes none: dropping matches silently
+ * is far worse than spending a few more milliseconds, and a store searching a
+ * 9,000-product catalog for a common word has every right to see all of them.
+ */
+function shortlist(index: MatchIndex, queryTokens: string[], cap?: number): Item[] {
   if (queryTokens.length === 0) return [];
   const hits = new Map<number, number>();
 
@@ -123,8 +135,9 @@ function shortlist(index: MatchIndex, queryTokens: string[]): Item[] {
     if (exact !== undefined) {
       for (const position of exact) hits.set(position, (hits.get(position) ?? 0) + 2);
     }
-    // Prefix hits catch "ched" -> "cheddar"; skipped for very short tokens.
-    if (token.length >= 3) {
+    // Prefix hits catch "ched" -> "cheddar", and "mi" -> "milk" the moment a
+    // type-ahead has two letters to work with.
+    if (token.length >= 2) {
       for (const [indexedToken, positions] of index.byToken) {
         if (indexedToken !== token && indexedToken.startsWith(token)) {
           for (const position of positions) hits.set(position, (hits.get(position) ?? 0) + 1);
@@ -133,12 +146,13 @@ function shortlist(index: MatchIndex, queryTokens: string[]): Item[] {
     }
   }
 
-  if (hits.size === 0) return index.items.slice(0, MAX_SCORED_CANDIDATES);
+  // Nothing shared a token, so there is nothing to rank — score a bounded
+  // sample only so a typo still gets a "did you mean".
+  if (hits.size === 0) return index.items.slice(0, MATCH_CANDIDATE_CAP);
 
-  return [...hits.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, MAX_SCORED_CANDIDATES)
-    .map(([position]) => index.items[position]);
+  const ranked = [...hits.entries()].sort((a, b) => b[1] - a[1]);
+  const limited = cap === undefined ? ranked : ranked.slice(0, cap);
+  return limited.map(([position]) => index.items[position]);
 }
 
 /**
@@ -266,7 +280,7 @@ export function matchPhrase(
   // 4. Fuzzy. Score every shortlisted item against every spelling we have.
   const scores = new Map<string, Candidate>();
   for (const query of queries) {
-    const candidates = shortlist(index, tokenize(query));
+    const candidates = shortlist(index, tokenize(query), MATCH_CANDIDATE_CAP);
     for (const item of candidates) {
       const score = scoreItem(query, item);
       const previous = scores.get(item.id);
@@ -297,15 +311,22 @@ export function matchPhrase(
   };
 }
 
-/** Free-text search over the catalog, used by the type-ahead add box. */
-export function searchItems(index: MatchIndex, query: string, limit = 12): Candidate[] {
+/**
+ * Free-text search over the catalog.
+ *
+ * `limit` trims the *returned* list only — every shortlisted item is scored
+ * either way, so asking for all of them costs the same as asking for ten.
+ * Omit it to get every match; pass one only when the caller genuinely shows a
+ * fixed number of rows, and tell the user what the total was.
+ */
+export function searchItems(index: MatchIndex, query: string, limit?: number): Candidate[] {
   const trimmed = query.trim();
   if (trimmed === '') return [];
   const tokens = tokenize(trimmed);
   const pool = shortlist(index, tokens);
-  return pool
+  const ranked = pool
     .map((item) => ({ item, score: scoreItem(trimmed, item) }))
     .filter((candidate) => candidate.score > 0.12)
-    .sort((a, b) => b.score - a.score || a.item.name.length - b.item.name.length)
-    .slice(0, limit);
+    .sort((a, b) => b.score - a.score || a.item.name.length - b.item.name.length);
+  return limit === undefined ? ranked : ranked.slice(0, limit);
 }

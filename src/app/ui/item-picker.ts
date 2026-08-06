@@ -13,6 +13,9 @@ import { itemDetail } from '../core/models';
 import { searchItems } from '../matching/matcher';
 import { aisleKey, aisleLabel } from '../matching/pick-list';
 
+/** Rows the dropdown shows at once; anything beyond is counted, never dropped in silence. */
+const VISIBLE_SUGGESTIONS = 25;
+
 @Component({
   selector: 'app-item-picker',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -50,6 +53,11 @@ import { aisleKey, aisleLabel } from '../matching/pick-list';
               <span class="where">{{ where(result.item) }}</span>
             </button>
           }
+          @if (hidden() > 0) {
+            <div class="suggestion-more small dim">
+              {{ hidden() }} more match “{{ query().trim() }}” — keep typing to narrow it down.
+            </div>
+          }
         </div>
       } @else if (open() && query().trim().length > 1) {
         <div class="suggestions">
@@ -74,11 +82,19 @@ export class ItemPicker {
   protected readonly open = signal(false);
   protected readonly highlighted = signal(0);
 
-  protected readonly results = computed(() => {
+  /**
+   * Every match, ranked. Capping the search itself would save nothing — the
+   * cost is scoring, not the returned rows — and knowing the true total is
+   * what lets the list admit when it is hiding something.
+   */
+  private readonly allResults = computed(() => {
     const text = this.query().trim();
     if (text.length < 2) return [];
-    return searchItems(this.data.matchIndex(), text, 10);
+    return searchItems(this.data.matchIndex(), text);
   });
+
+  protected readonly results = computed(() => this.allResults().slice(0, VISIBLE_SUGGESTIONS));
+  protected readonly hidden = computed(() => this.allResults().length - this.results().length);
 
   focus(): void {
     this.box()?.nativeElement.focus();

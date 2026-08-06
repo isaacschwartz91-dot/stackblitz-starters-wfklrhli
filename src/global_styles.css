@@ -704,6 +704,12 @@ td select {
   background: var(--accent-soft);
 }
 
+.suggestion-more {
+  padding: 0.45rem 0.55rem;
+  border-top: 1px solid var(--line);
+  margin-top: 0.2rem;
+}
+
 .suggestion .where {
   font-size: 0.78rem;
   color: var(--ink-3);
