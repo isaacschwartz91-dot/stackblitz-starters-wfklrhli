@@ -33,6 +33,8 @@ export interface SupabaseConfig {
 const SESSION_KEY = 'grocery-picker.supabase-session';
 const CONFIG_KEY = 'grocery-picker.supabase-config';
 const DISCONNECTED_KEY = 'grocery-picker.supabase-disconnected';
+/** Rows per read. Matches the default PostgREST `max-rows`, so no page is short by surprise. */
+const SELECT_PAGE_SIZE = 1000;
 
 interface StoredSession {
   accessToken: string;
@@ -377,10 +379,34 @@ export class SupabaseBackend implements Backend, AuthBackend {
     return response;
   }
 
+  /**
+   * Read a whole table, however big it is.
+   *
+   * PostgREST refuses to return more than the project's `max-rows` — 1,000 on
+   * a default Supabase — and does not treat that as an error: it answers 200
+   * with the first 1,000 rows and mentions the truncation only in a
+   * Content-Range header. A 9,420-product catalog would quietly arrive as the
+   * alphabetically-first 1,000, and every search would look broken because
+   * most of the store was never loaded. So page until a short page arrives.
+   */
   private async select<T>(path: string): Promise<T[]> {
-    const response = await this.request(path, { headers: this.headers() });
-    if (!response.ok) throw new Error(await describeError(response));
-    return (await response.json()) as T[];
+    const rows: T[] = [];
+    for (let from = 0; ; from += SELECT_PAGE_SIZE) {
+      const response = await this.request(path, {
+        headers: this.headers({
+          'Range-Unit': 'items',
+          Range: `${from}-${from + SELECT_PAGE_SIZE - 1}`,
+        }),
+      });
+      // Asking past the last row is how a table whose size is an exact
+      // multiple of the page size ends; it is not a failure.
+      if (response.status === 416) return rows;
+      if (!response.ok) throw new Error(await describeError(response));
+
+      const page = (await response.json()) as T[];
+      rows.push(...page);
+      if (page.length < SELECT_PAGE_SIZE) return rows;
+    }
   }
 
   /** PostgREST upsert: conflicting ids are merged, not rejected. */
