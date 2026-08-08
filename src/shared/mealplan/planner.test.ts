@@ -195,6 +195,33 @@ describe('FR-28: a meal that cannot be filled says so', () => {
   });
 });
 
+describe('maximum-only plans', () => {
+  test('spread every purchased creditable serving across the covered days', () => {
+    const snapshot = makeSnapshot({
+      perMemberPerDay: { fruit: 0, vegetable: 0, protein: 0, starch: 0 },
+      maxPerMemberPerDay: { fruit: 2, vegetable: 3, protein: 3, starch: 4 },
+    });
+    const catalog = makeCatalog();
+    const apples = catalog.find((item) => item.id === 'fruit-0')!;
+    const carrots = catalog.find((item) => item.id === 'vegetable-0')!;
+    const lines = [makeLine(apples, 2), makeLine(carrots, 1)];
+
+    const plan = generateMealPlan({
+      lines,
+      snapshot,
+      periodStart: PERIOD_START,
+      restrictions: [],
+      seed: 321,
+    });
+
+    const scheduled = scheduledUnitsByCategory(plan.days);
+    assert.equal(scheduled.fruit, apples.servingsPerPackageUnits * 2);
+    assert.equal(scheduled.vegetable, carrots.servingsPerPackageUnits);
+    assert.equal(plan.unused.length, 0);
+    assert.equal(plan.complete, true);
+  });
+});
+
 describe('section 5: a household of one still gets a full plan', () => {
   test('three meals a day, every day, for a single member', () => {
     const snapshot = makeSnapshot({ memberCount: 1 });

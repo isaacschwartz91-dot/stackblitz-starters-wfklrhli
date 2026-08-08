@@ -189,9 +189,9 @@ type Pane = 'rules' | 'categories' | 'items';
             </div>
           </div>
 
-          <h2 class="sec" style="margin-top:22px">Servings per member per day</h2>
+          <h2 class="sec" style="margin-top:22px">Maximum servings per member per day</h2>
           <p class="sec-note">
-            A 3-member household over {{ draft().daysCovered }} days needs the totals in the last column.
+            Customers cannot order above these totals. Minimums are not enforced in the current program.
           </p>
 
           <div class="scroll-x">
@@ -199,10 +199,9 @@ type Pane = 'rules' | 'categories' | 'items';
               <thead>
                 <tr>
                   <th>Category</th>
-                  <th class="r">Required / member / day</th>
-                  <th class="r">Maximum (optional)</th>
+                  <th class="r">Maximum / member / day</th>
                   <th class="r">Min. distinct items</th>
-                  <th class="r">Total for 3 members</th>
+                  <th class="r">Maximum for 3 members</th>
                 </tr>
               </thead>
               <tbody>
@@ -212,15 +211,7 @@ type Pane = 'rules' | 'categories' | 'items';
                     <td class="r">
                       <input
                         class="input num"
-                        [ngModel]="servingsText(req.servingsPerMemberPerDayUnits)"
-                        [ngModelOptions]="{ standalone: true }"
-                        (ngModelChange)="setRequired(req.categoryKey, $event)"
-                      />
-                    </td>
-                    <td class="r">
-                      <input
-                        class="input num"
-                        placeholder="none"
+                        min="0"
                         [ngModel]="req.maxServingsPerMemberPerDayUnits === null ? '' : servingsText(req.maxServingsPerMemberPerDayUnits)"
                         [ngModelOptions]="{ standalone: true }"
                         (ngModelChange)="setMax(req.categoryKey, $event)"
@@ -238,7 +229,7 @@ type Pane = 'rules' | 'categories' | 'items';
                       />
                     </td>
                     <td class="r num">
-                      {{ servingsText(req.servingsPerMemberPerDayUnits * 3 * draft().daysCovered) }}
+                      {{ servingsText((req.maxServingsPerMemberPerDayUnits ?? 0) * 3 * draft().daysCovered) }}
                     </td>
                   </tr>
                 }

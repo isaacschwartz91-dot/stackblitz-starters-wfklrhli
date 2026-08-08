@@ -146,6 +146,12 @@ export function generateMealPlan(input: PlanInput): GeneratedPlan {
       lastDayByMeal: {},
     }));
 
+  const purchasedUnitsByCategory: Record<string, number> = {};
+  for (const pool of pools) {
+    purchasedUnitsByCategory[pool.categoryKey] =
+      (purchasedUnitsByCategory[pool.categoryKey] ?? 0) + pool.totalUnits;
+  }
+
   // Daily household requirement per category: per member per day x members.
   const dailyUnitsByCategory: Record<string, number> = {};
   for (const req of snapshot.requirements) {
@@ -168,7 +174,15 @@ export function generateMealPlan(input: PlanInput): GeneratedPlan {
     }));
 
     for (const cat of orderedCategories) {
-      const dailyUnits = dailyUnitsByCategory[cat.key] ?? 0;
+      const minimumDailyUnits = dailyUnitsByCategory[cat.key] ?? 0;
+      // Maximum-only programs have no prescribed daily requirement. Spread
+      // what was actually purchased across the covered days so the customer
+      // still gets a useful schedule and all creditable food is accounted for.
+      const dailyUnits =
+        minimumDailyUnits > 0
+          ? minimumDailyUnits
+          : Math.floor(((purchasedUnitsByCategory[cat.key] ?? 0) * (dayIndex + 1)) / snapshot.daysCovered) -
+            Math.floor(((purchasedUnitsByCategory[cat.key] ?? 0) * dayIndex) / snapshot.daysCovered);
       if (dailyUnits <= 0) continue;
       const allocation = mealAllocationForCategory(snapshot, cat.key, dailyUnits);
 

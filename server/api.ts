@@ -888,11 +888,26 @@ function setLines(
     lastWriterId: me.account.id,
     totalCents: lines.reduce((sum, l) => sum + l.unitPriceCentsSnapshot * l.qty, 0),
   };
+
+  const previousCompliance = evaluateOrder(order.lines, order.rulesSnapshot);
+  const updatedCompliance = evaluateOrder(updated.lines, updated.rulesSnapshot);
+  const increasedPastMaximum = updatedCompliance.categories.find((category) => {
+    const previous = previousCompliance.categories.find(
+      (candidate) => candidate.categoryKey === category.categoryKey,
+    );
+    return category.overMax && (!previous?.overMax || category.inCartUnits > previous.inCartUnits);
+  });
+  if (increasedPastMaximum) {
+    return json(422, {
+      error: `${increasedPastMaximum.label} is at its maximum. Reduce another item in that category before adding more.`,
+    });
+  }
+
   repo.upsertOrder(ctx.db, updated);
 
   return json(200, {
     order: updated,
-    compliance: evaluateOrder(updated.lines, updated.rulesSnapshot),
+    compliance: updatedCompliance,
     conflict,
   });
 }
@@ -917,6 +932,16 @@ function finalizeOrder(
   const overrideReason = asString(body['overrideReason']).trim();
 
   const result = evaluateOrder(order.lines, order.rulesSnapshot);
+
+  if (order.lines.length === 0) {
+    return json(422, { error: 'Add at least one item before finalizing this order.' });
+  }
+  const overMaximum = result.categories.find((category) => category.overMax);
+  if (overMaximum) {
+    return json(422, {
+      error: `${overMaximum.label} is over its maximum and must be reduced before finalizing.`,
+    });
+  }
 
   if (!result.canFinalize) {
     // Only staff may override; a customer cannot wave through their own

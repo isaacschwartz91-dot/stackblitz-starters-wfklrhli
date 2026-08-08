@@ -14,7 +14,7 @@ import { AppState } from '../core/state';
 import { I18nService } from '../core/i18n';
 import { formatCents, formatUnits } from '../../shared/units';
 import type { DietaryTag, Item } from '../../shared/types';
-import type { CategoryStatus } from '../../shared/compliance/engine';
+import type { CategoryStatus, Suggestion } from '../../shared/compliance/engine';
 
 @Component({
   selector: 'app-order',
@@ -191,15 +191,26 @@ import type { CategoryStatus } from '../../shared/compliance/engine';
         font-size: 18px;
         font-weight: 700;
       }
-      .qty output {
+      .qty input {
         flex: 1;
-        display: grid;
-        place-items: center;
         min-width: 44px;
+        width: 100%;
+        border: 0;
+        border-radius: 0;
+        appearance: textfield;
+        text-align: center;
         font-family: var(--mono);
         font-size: 15px;
         font-weight: 700;
         background: var(--surface);
+      }
+      .qty input::-webkit-inner-spin-button,
+      .qty input::-webkit-outer-spin-button {
+        appearance: none;
+        margin: 0;
+      }
+      .qty input:focus-visible {
+        outline-offset: -2px;
       }
 
       .meter {
@@ -318,30 +329,469 @@ import type { CategoryStatus } from '../../shared/compliance/engine';
         margin: 6px 0 0;
         padding-left: 16px;
       }
+
+      /* Customer-first order journey -------------------------------------- */
+      .main {
+        padding: 32px clamp(20px, 4vw, 52px) 48px;
+      }
+      .pre-order {
+        max-width: 780px;
+      }
+      .order-intro,
+      .pre-order-hero {
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background:
+          radial-gradient(circle at 100% 0, var(--spruce-soft) 0, transparent 42%),
+          var(--surface);
+        padding: clamp(20px, 4vw, 34px);
+        margin-bottom: 26px;
+      }
+      .pre-order-hero {
+        margin-top: 28px;
+      }
+      .eyebrow {
+        display: block;
+        color: var(--spruce);
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        margin-bottom: 8px;
+      }
+      .order-title {
+        font-family: var(--serif);
+        font-size: clamp(28px, 3vw, 38px);
+        line-height: 1.08;
+        letter-spacing: -0.025em;
+        margin: 0;
+        max-width: 18ch;
+      }
+      .order-lede {
+        color: var(--ink-2);
+        font-size: 16px;
+        line-height: 1.55;
+        margin: 12px 0 0;
+        max-width: 60ch;
+      }
+      .journey {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+        list-style: none;
+        margin: 24px 0 0;
+        padding: 0;
+      }
+      .journey-step {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: color-mix(in srgb, var(--surface) 88%, var(--paper));
+        color: var(--ink-3);
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        min-height: 56px;
+        padding: 9px 10px;
+        font-size: 12px;
+        font-weight: 700;
+      }
+      .journey-step.active {
+        border-color: var(--spruce);
+        background: var(--spruce-soft);
+        color: var(--spruce);
+      }
+      .journey-step.done {
+        color: var(--ink-2);
+      }
+      .step-number {
+        display: grid;
+        place-items: center;
+        flex: 0 0 24px;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        background: var(--surface-2);
+        font-family: var(--mono);
+        font-size: 11px;
+      }
+      .journey-step.active .step-number {
+        background: var(--spruce);
+        color: var(--spruce-ink);
+      }
+      .journey-state {
+        display: block;
+        font-size: 9px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        margin-top: 1px;
+      }
+      .order-glance {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 10px 22px;
+        margin-top: 22px;
+        padding-top: 18px;
+        border-top: 1px solid var(--line);
+      }
+      .glance-metric {
+        display: flex;
+        align-items: baseline;
+        gap: 6px;
+        color: var(--ink-2);
+        font-size: 12px;
+      }
+      .glance-metric b {
+        color: var(--ink);
+        font-family: var(--mono);
+        font-size: 18px;
+      }
+      .quick-start {
+        border: 1px solid color-mix(in srgb, var(--spruce) 38%, var(--line));
+        border-radius: 16px;
+        background: var(--spruce-soft);
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 18px;
+        align-items: center;
+        padding: 18px;
+        margin-bottom: 28px;
+      }
+      .quick-start h2,
+      .catalogue-heading h2 {
+        font-family: var(--serif);
+        font-size: 20px;
+        margin: 0;
+      }
+      .quick-start p {
+        color: var(--ink-2);
+        font-size: 13px;
+        margin: 5px 0 0;
+        max-width: 62ch;
+      }
+      .quick-start-actions {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .catalogue-heading {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 18px;
+        margin-bottom: 14px;
+      }
+      .catalogue-heading .sec-note {
+        margin: 4px 0 0;
+      }
+      .toolbar {
+        margin-bottom: 16px;
+      }
+      .toolbar .input {
+        border-radius: 12px;
+        min-height: 48px;
+      }
+      .filters {
+        margin-bottom: 20px;
+      }
+      .filters button {
+        min-height: 40px;
+      }
+      .grid {
+        gap: 14px;
+      }
+      .tile {
+        border-radius: 14px;
+        padding: 15px;
+        box-shadow: 0 2px 6px rgb(20 32 28 / 4%);
+        transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+      }
+      .tile:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgb(20 32 28 / 8%);
+      }
+      .tile-name {
+        font-size: 14.5px;
+      }
+      .tag.recommended {
+        border-color: var(--spruce);
+        background: var(--spruce-soft);
+        color: var(--spruce);
+        font-weight: 800;
+      }
+      .qty {
+        border-radius: 10px;
+      }
+      .qty button:hover:not(:disabled) {
+        background: var(--spruce-soft);
+        color: var(--spruce);
+      }
+      .cart-section {
+        border-top: 1px solid var(--line);
+        margin-top: 34px;
+        padding-top: 26px;
+      }
+      .cart-section .sec-note {
+        margin-bottom: 0;
+      }
+      .rail {
+        background: color-mix(in srgb, var(--surface) 94%, var(--spruce-soft));
+        border-left: 1px solid var(--line);
+        gap: 18px;
+        padding: 24px;
+      }
+      .rail-summary {
+        border-bottom: 1px solid var(--line);
+        padding-bottom: 16px;
+      }
+      .rail-summary .eyebrow {
+        margin-bottom: 5px;
+      }
+      .rail-progress {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+      }
+      .rail-progress b {
+        font-family: var(--mono);
+        font-size: 28px;
+        letter-spacing: -0.05em;
+      }
+      .rail-progress span {
+        color: var(--ink-2);
+        font-size: 12px;
+        font-weight: 700;
+      }
+      .verdict {
+        border: 1px solid transparent;
+        border-radius: 12px;
+      }
+      .verdict.ok {
+        border-color: color-mix(in srgb, var(--spruce) 28%, var(--line));
+      }
+      .verdict.no {
+        border-color: color-mix(in srgb, var(--ochre) 28%, var(--line));
+      }
+      .budget {
+        border-radius: 12px;
+      }
+      .sug {
+        border-radius: 12px;
+      }
+      .rail-handle-summary {
+        color: var(--ink-2);
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 700;
+      }
+      @media (max-width: 900px) {
+        .main {
+          padding: 22px 18px 132px;
+        }
+        .order-intro,
+        .pre-order-hero {
+          border-radius: 14px;
+          padding: 20px;
+          margin-bottom: 20px;
+        }
+        .journey {
+          grid-template-columns: 1fr;
+          gap: 7px;
+        }
+        .journey-step {
+          min-height: 48px;
+        }
+        .quick-start {
+          grid-template-columns: 1fr;
+          gap: 14px;
+        }
+        .quick-start-actions {
+          justify-content: stretch;
+        }
+        .quick-start-actions .btn {
+          flex: 1 1 190px;
+        }
+        .catalogue-heading {
+          align-items: flex-start;
+          flex-direction: column;
+          gap: 4px;
+        }
+        .rail {
+          border-top-color: var(--spruce);
+          padding: 12px 18px 20px;
+        }
+        .rail-handle {
+          gap: 12px;
+          text-transform: none;
+          letter-spacing: 0;
+          font-size: 14px;
+        }
+      }
+      @media (max-width: 600px) {
+        .main {
+          padding: 16px 14px 96px;
+        }
+        .order-intro,
+        .pre-order-hero {
+          padding: 18px;
+        }
+        .order-title {
+          font-size: 30px;
+        }
+        .toolbar {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) auto;
+          gap: 8px;
+        }
+        .toolbar .input {
+          min-width: 0;
+        }
+        .toolbar .btn {
+          padding: 0 12px;
+        }
+        .filters {
+          flex-wrap: nowrap;
+          overflow-x: auto;
+          padding-bottom: 4px;
+          scrollbar-width: thin;
+        }
+        .filters button {
+          flex: 0 0 auto;
+        }
+        .grid {
+          grid-template-columns: 1fr;
+          gap: 10px;
+        }
+        .tile {
+          gap: 9px;
+          padding: 14px;
+        }
+        .tile:hover {
+          transform: none;
+        }
+        .tile-name {
+          font-size: 16px;
+        }
+        .qty button {
+          width: 52px;
+        }
+        .qty input {
+          font-size: 16px;
+        }
+        .cart-section {
+          margin-top: 26px;
+          padding-top: 20px;
+        }
+        .rail {
+          max-height: min(72dvh, 620px);
+          padding: 10px 14px 16px;
+        }
+      }
     `,
   ],
   template: `
     <a class="skip-link" href="#compliance-panel">{{ t()('skipToPanel') }}</a>
 
     @if (!state.order()) {
-      <div class="main">
-        <h1 class="page">{{ t()('buildOrder') }}</h1>
-        @if (!state.household()) {
-          <p class="sec-note">{{ t()('noHousehold') }}</p>
-        } @else if (state.suspended()) {
-          <div class="note warn">{{ t()('suspendedNotice') }}</div>
-        } @else {
-          <p class="sec-note">{{ t()('buildOrderHint') }}</p>
-          <button class="btn" type="button" (click)="state.startOrder()" [disabled]="state.busy()">
-            {{ t()('startOrder') }}
-          </button>
-        }
+      <div class="main pre-order">
+        <section class="pre-order-hero" aria-labelledby="order-welcome-title">
+          <span class="eyebrow">{{ t()('orderJourney') }}</span>
+          <h1 class="order-title" id="order-welcome-title">{{ t()('orderWelcome') }}</h1>
+          <p class="order-lede">{{ t()('orderWelcomeBody') }}</p>
+
+          <ol class="journey" [attr.aria-label]="t()('orderJourney')">
+            <li class="journey-step active">
+              <span class="step-number">1</span>
+              <span>
+                {{ t()('chooseFoodStep') }}
+                <small class="journey-state">{{ t()('currentStep') }}</small>
+              </span>
+            </li>
+            <li class="journey-step">
+              <span class="step-number">2</span>
+              <span>{{ t()('checkNeedsStep') }}</span>
+            </li>
+            <li class="journey-step">
+              <span class="step-number">3</span>
+              <span>{{ t()('finishOrderStep') }}</span>
+            </li>
+          </ol>
+
+          @if (!state.household()) {
+            <p class="sec-note" style="margin-top:22px">{{ t()('noHousehold') }}</p>
+          } @else if (state.suspended()) {
+            <div class="note warn" style="margin-top:22px">{{ t()('suspendedNotice') }}</div>
+          } @else {
+            <p class="sec-note" style="margin:22px 0 12px">{{ t()('buildOrderHint') }}</p>
+            <button class="btn" type="button" (click)="state.startOrder()" [disabled]="state.busy()">
+              {{ t()('startOrder') }}
+            </button>
+          }
+        </section>
       </div>
     } @else {
       <div class="wrap">
         <main class="main">
-          <h1 class="page">{{ t()('buildOrder') }}</h1>
-          <p class="sec-note">{{ t()('buildOrderHint') }}</p>
+          <section class="order-intro" aria-labelledby="order-title">
+            <span class="eyebrow">{{ t()('orderJourney') }}</span>
+            <h1 class="order-title" id="order-title">{{ t()('buildOrder') }}</h1>
+            <p class="order-lede">{{ t()('orderWelcomeBody') }}</p>
+
+            <ol class="journey" [attr.aria-label]="t()('orderJourney')">
+              <li
+                class="journey-step"
+                [class.active]="orderStage() === 'choose'"
+                [class.done]="orderStage() !== 'choose'"
+              >
+                <span class="step-number">{{ orderStage() === 'choose' ? '1' : '✓' }}</span>
+                <span>
+                  {{ t()('chooseFoodStep') }}
+                  @if (orderStage() === 'choose') {
+                    <small class="journey-state">{{ t()('currentStep') }}</small>
+                  }
+                </span>
+              </li>
+              <li
+                class="journey-step"
+                [class.active]="orderStage() === 'check'"
+                [class.done]="orderStage() === 'finish'"
+              >
+                <span class="step-number">{{ orderStage() === 'finish' ? '✓' : '2' }}</span>
+                <span>
+                  {{ t()('checkNeedsStep') }}
+                  @if (orderStage() === 'check') {
+                    <small class="journey-state">{{ t()('currentStep') }}</small>
+                  }
+                </span>
+              </li>
+              <li class="journey-step" [class.active]="orderStage() === 'finish'">
+                <span class="step-number">3</span>
+                <span>
+                  {{ t()('finishOrderStep') }}
+                  @if (orderStage() === 'finish') {
+                    <small class="journey-state">{{ t()('currentStep') }}</small>
+                  }
+                </span>
+              </li>
+            </ol>
+
+            @if (state.compliance(); as result) {
+              <div class="order-glance" aria-live="polite">
+                <span class="glance-metric">
+                  <b>{{ itemCount() }}</b> {{ t()('itemsInOrder') }}
+                </span>
+                <span class="glance-metric">
+                  <b>{{ packageCount() }}</b> {{ t()('packagesInOrder') }}
+                </span>
+                <span class="glance-metric">
+                  <b>{{ money(result.totalCents) }}</b> {{ t()('orderTotal') }}
+                </span>
+              </div>
+            }
+          </section>
 
           <!-- FR-6 -->
           @if (state.priceDrift().length > 0) {
@@ -378,6 +828,37 @@ import type { CategoryStatus } from '../../shared/compliance/engine';
               {{ t()('categoryUnstockable') }}: <b>{{ categoryLabel(key) }}</b>
             </div>
           }
+
+          @if (showQuickStart()) {
+            <section class="quick-start no-print" aria-labelledby="quick-start-title">
+              <div>
+                <span class="eyebrow">{{ t()('recommended') }}</span>
+                <h2 id="quick-start-title">{{ t()('quickStartTitle') }}</h2>
+                <p>{{ t()('quickStartText') }}</p>
+              </div>
+              <div class="quick-start-actions">
+                <button
+                  class="btn"
+                  type="button"
+                  [disabled]="readOnly() || state.busy()"
+                  (click)="addRecommendedBasket()"
+                >
+                  {{ t()('addRecommendedBasket') }}
+                </button>
+                <button class="btn ghost small" type="button" (click)="dismissQuickStart()">
+                  {{ t()('chooseMyself') }}
+                </button>
+              </div>
+            </section>
+          }
+
+          <section class="catalogue-section" aria-labelledby="shopping-title">
+            <div class="catalogue-heading">
+              <div>
+                <h2 id="shopping-title">{{ t()('shoppingTitle') }}</h2>
+                <p class="sec-note">{{ t()('shoppingHint') }}</p>
+              </div>
+            </div>
 
           <div class="toolbar no-print">
             <label class="sr-only" for="search">{{ t()('searchItems') }}</label>
@@ -450,13 +931,16 @@ import type { CategoryStatus } from '../../shared/compliance/engine';
                 </div>
 
                 <div class="tagrow">
+                  @if (isRecommended(item.id)) {
+                    <span class="tag recommended">{{ t()('recommended') }}</span>
+                  }
                   @if (item.shelfLifeClass === 'fresh' || item.shelfLifeClass === 'refrigerated') {
                     <span class="tag cold">{{ t()('useEarly') }}</span>
                   }
                   @if (item.servingsPerPackageUnits === 0) {
                     <span class="tag">{{ t()('noServings') }}</span>
                   }
-                  @for (tag of item.tags.slice(0, 2); track tag) {
+                  @for (tag of visibleTags(item); track tag) {
                     <span class="tag">{{ tag }}</span>
                   }
                 </div>
@@ -484,11 +968,25 @@ import type { CategoryStatus } from '../../shared/compliance/engine';
                   >
                     −
                   </button>
-                  <output [attr.aria-label]="t()('qty') + ' ' + item.name">{{ qtyOf(item.id) }}</output>
+                  <label class="sr-only" [for]="'qty-' + item.id">
+                    {{ t()('qty') }} {{ i18n.localized(item.name, item.nameEs) }}
+                  </label>
+                  <input
+                    [id]="'qty-' + item.id"
+                    class="num"
+                    type="number"
+                    min="0"
+                    step="1"
+                    inputmode="numeric"
+                    [value]="qtyOf(item.id)"
+                    [attr.max]="quantityLimit(item)"
+                    [disabled]="readOnly()"
+                    (change)="updateQuantity(item, $any($event.target).value)"
+                  />
                   <button
                     type="button"
                     [attr.aria-label]="t()('add') + ' ' + item.name"
-                    [disabled]="readOnly()"
+                    [disabled]="readOnly() || !canIncreaseQuantity(item)"
                     (click)="bump(item, 1)"
                   >
                     +
@@ -497,8 +995,10 @@ import type { CategoryStatus } from '../../shared/compliance/engine';
               </article>
             }
           </div>
+          </section>
 
-          <h2 class="sec" style="margin-top:26px">{{ t()('inThisOrder') }}</h2>
+          <section class="cart-section" aria-labelledby="cart-title">
+          <h2 class="sec" id="cart-title">{{ t()('inThisOrder') }}</h2>
           @if (state.order()!.lines.length === 0) {
             <p class="sec-note">{{ t()('emptyOrder') }}</p>
           } @else {
@@ -548,6 +1048,7 @@ import type { CategoryStatus } from '../../shared/compliance/engine';
               </table>
             </div>
           }
+          </section>
         </main>
 
         <!-- ---------------- compliance rail ---------------- -->
@@ -563,11 +1064,22 @@ import type { CategoryStatus } from '../../shared/compliance/engine';
             [attr.aria-expanded]="!collapsed()"
             (click)="collapsed.set(!collapsed())"
           >
-            <span>{{ t()('requiredServings') }}</span>
+            <span>{{ t()('viewProgress') }}</span>
+            <span class="rail-handle-summary">
+              {{ categoriesUsedCount() }}/{{ categoryCount() }} {{ t()('categoriesMet') }}
+            </span>
             <span aria-hidden="true">{{ collapsed() ? '▴' : '▾' }}</span>
           </button>
 
           @if (state.compliance(); as result) {
+            <div class="rail-summary">
+              <span class="eyebrow">{{ t()('progress') }}</span>
+              <div class="rail-progress">
+                <b>{{ categoriesUsedCount() }}/{{ categoryCount() }}</b>
+                <span>{{ t()('categoriesMet') }}</span>
+              </div>
+            </div>
+
             <div class="verdict" [class.ok]="result.canFinalize" [class.no]="!result.canFinalize">
               <span class="mark" aria-hidden="true">{{ result.canFinalize ? '✓' : '!' }}</span>
               <span>{{ result.canFinalize ? t()('qualifies') : t()('doesNotQualify') }}</span>
@@ -581,36 +1093,31 @@ import type { CategoryStatus } from '../../shared/compliance/engine';
                     <span class="meter-name">{{ cat.label }}</span>
                     <span class="meter-val num">
                       <b>{{ servings(cat.inCartUnits) }}</b> {{ t()('of') }}
-                      {{ servings(cat.requiredUnits) }}
+                      {{ servings(categoryMaximum(cat)) }}
                     </span>
                   </div>
                   <div
                     class="track"
                     role="meter"
                     aria-valuemin="0"
-                    [attr.aria-valuemax]="cat.requiredUnits"
+                    [attr.aria-valuemax]="categoryMaximum(cat)"
                     [attr.aria-valuenow]="cat.inCartUnits"
                     [attr.aria-label]="meterLabel(cat)"
                   >
                     <div
                       class="fill"
-                      [class.short]="cat.shortfallUnits > 0"
                       [class.over]="cat.overMax"
                       [style.width.%]="percent(cat)"
                     ></div>
                   </div>
 
                   <!-- NFR-14: the status is text, not just a coloured bar -->
-                  @if (cat.shortfallUnits > 0) {
-                    <span class="chip short">
-                      {{ t()('shortBy') }} {{ servings(cat.shortfallUnits) }}
-                    </span>
-                  } @else if (cat.overMax) {
+                  @if (cat.overMax) {
                     <span class="chip over">{{ t()('overMaximum') }}</span>
-                  } @else if (cat.surplusUnits > 0) {
+                  } @else if (cat.inCartUnits > 0) {
                     <span class="chip ok">{{ t()('overMinimum') }}</span>
                   } @else {
-                    <span class="chip ok">{{ t()('met') }}</span>
+                    <span class="chip muted">{{ t()('available') }}</span>
                   }
                   @if (cat.varietyShortfall > 0) {
                     <span class="chip short" style="margin-left:6px">
@@ -820,13 +1327,15 @@ export class OrderComponent {
   protected readonly t = this.i18n.t;
   protected readonly query = signal('');
   protected readonly activeCategory = signal<string>('all');
-  protected readonly collapsed = signal(false);
+  /** On phones the progress sheet starts as a compact, always-visible summary. */
+  protected readonly collapsed = signal(true);
   protected readonly expanded = signal<string | null>(null);
   protected readonly overrideReason = signal('');
   protected readonly initials = signal('');
   protected readonly scanning = signal(false);
   protected readonly upc = signal('');
   protected readonly scanError = signal(false);
+  protected readonly quickStartDismissed = signal(false);
 
   /** FR-8 (DECIDE): shown only where a scanner is actually present. */
   protected readonly scannerEnabled = signal(true);
@@ -839,6 +1348,56 @@ export class OrderComponent {
   protected readonly readOnly = computed(
     () => this.state.order()?.status !== 'draft' || this.state.suspended(),
   );
+
+  /** One budget-friendly recommendation per unmet category for a gentle start. */
+  protected readonly quickStartSuggestions = computed<Suggestion[]>(() => {
+    const result = this.state.compliance();
+    const suggestions = this.state.suggestions();
+    if (!result) return [];
+
+    const picks: Suggestion[] = [];
+    for (const category of result.categories) {
+      if (category.shortfallUnits <= 0) continue;
+      const choices = suggestions[category.categoryKey] ?? [];
+      const pick = choices.find((suggestion) => suggestion.closesGap) ?? choices[0];
+      if (pick) picks.push(pick);
+    }
+    return picks;
+  });
+
+  protected readonly recommendedItemIds = computed(
+    () => new Set(this.quickStartSuggestions().map((suggestion) => suggestion.item.id)),
+  );
+
+  protected readonly showQuickStart = computed(
+    () =>
+      !this.quickStartDismissed() &&
+      (this.state.order()?.lines.length ?? 0) === 0 &&
+      this.quickStartSuggestions().length > 0,
+  );
+
+  protected readonly itemCount = computed(() => this.state.order()?.lines.length ?? 0);
+  protected readonly packageCount = computed(() =>
+    (this.state.order()?.lines ?? []).reduce((total, line) => total + line.qty, 0),
+  );
+  protected readonly categoryCount = computed(() => this.state.compliance()?.categories.length ?? 0);
+  protected readonly completedCategoryCount = computed(
+    () =>
+      this.state
+        .compliance()
+        ?.categories.filter(
+          (category) =>
+            category.shortfallUnits === 0 && !category.overMax && category.varietyShortfall === 0,
+        ).length ?? 0,
+  );
+  protected readonly categoriesUsedCount = computed(
+    () => this.state.compliance()?.categories.filter((category) => category.inCartUnits > 0).length ?? 0,
+  );
+  protected readonly orderStage = computed<'choose' | 'check' | 'finish'>(() => {
+    const result = this.state.compliance();
+    if (result?.canFinalize) return 'finish';
+    return this.itemCount() > 0 ? 'check' : 'choose';
+  });
 
   protected readonly visibleItems = computed(() => {
     const term = this.query().trim().toLowerCase();
@@ -869,13 +1428,19 @@ export class OrderComponent {
     return this.state.conflictsFor(item);
   }
 
+  /** Keep the shopping cards focused on ordering; dietary flags remain enforced in the rules. */
+  protected visibleTags(item: Item): DietaryTag[] {
+    return item.tags.filter((tag) => tag !== 'halal' && tag !== 'kosher').slice(0, 2);
+  }
+
   protected qtyOf(itemId: string): number {
     return this.state.order()?.lines.find((l) => l.itemId === itemId)?.qty ?? 0;
   }
 
   protected percent(cat: CategoryStatus): number {
-    if (cat.requiredUnits <= 0) return 100;
-    return Math.min(100, Math.round((cat.inCartUnits / cat.requiredUnits) * 100));
+    const maximum = this.categoryMaximum(cat);
+    if (maximum <= 0) return 0;
+    return Math.min(100, Math.round((cat.inCartUnits / maximum) * 100));
   }
 
   protected budgetPercent(total: number, cap: number): number {
@@ -887,10 +1452,13 @@ export class OrderComponent {
   protected meterLabel(cat: CategoryStatus): string {
     const t = this.t();
     const base = `${cat.label}: ${formatUnits(cat.inCartUnits)} ${t('of')} ${formatUnits(
-      cat.requiredUnits,
+      this.categoryMaximum(cat),
     )} ${t('servings')}`;
-    if (cat.shortfallUnits > 0) return `${base}, ${t('shortBy')} ${formatUnits(cat.shortfallUnits)}`;
-    return `${base}, ${t('met')}`;
+    return cat.overMax ? `${base}, ${t('overMaximum')}` : `${base}, ${t('overMinimum')}`;
+  }
+
+  protected categoryMaximum(cat: CategoryStatus): number {
+    return cat.maxUnits ?? cat.requiredUnits;
   }
 
   protected budgetLabel(total: number, cap: number): string {
@@ -902,16 +1470,66 @@ export class OrderComponent {
     return this.state.suggestions()[categoryKey] ?? [];
   }
 
+  protected isRecommended(itemId: string): boolean {
+    return this.recommendedItemIds().has(itemId);
+  }
+
   protected toggleBreakdown(key: string): void {
     this.expanded.set(this.expanded() === key ? null : key);
   }
 
   protected bump(item: Item, delta: number): void {
-    void this.state.setQuantity(item.id, Math.max(0, this.qtyOf(item.id) + delta));
+    const maximum = this.quantityLimit(item);
+    const next = Math.max(0, this.qtyOf(item.id) + delta);
+    void this.state.setQuantity(item.id, maximum === null ? next : Math.min(next, maximum));
+  }
+
+  /** Commit a typed whole-package quantity when the field is changed or blurred. */
+  protected updateQuantity(item: Item, rawQuantity: string): void {
+    const quantity = Number(rawQuantity);
+    if (!Number.isFinite(quantity)) return;
+    const maximum = this.quantityLimit(item);
+    const wholePackages = Math.max(0, Math.floor(quantity));
+    void this.state.setQuantity(
+      item.id,
+      maximum === null ? wholePackages : Math.min(wholePackages, maximum),
+    );
+  }
+
+  /** Whole packages that still fit below this item's category ceiling. */
+  protected quantityLimit(item: Item): number | null {
+    if (item.servingsPerPackageUnits <= 0) return null;
+    const category = this.state
+      .compliance()
+      ?.categories.find((candidate) => candidate.categoryKey === item.categoryKey);
+    if (!category || category.maxUnits === null) return null;
+
+    const unitsFromOtherItems =
+      category.inCartUnits - this.qtyOf(item.id) * item.servingsPerPackageUnits;
+    return Math.max(0, Math.floor((category.maxUnits - unitsFromOtherItems) / item.servingsPerPackageUnits));
+  }
+
+  protected canIncreaseQuantity(item: Item): boolean {
+    const maximum = this.quantityLimit(item);
+    return maximum === null || this.qtyOf(item.id) < maximum;
   }
 
   protected addSuggestion(itemId: string, qty: number): void {
     void this.state.setQuantity(itemId, this.qtyOf(itemId) + qty);
+  }
+
+  protected dismissQuickStart(): void {
+    this.quickStartDismissed.set(true);
+  }
+
+  protected async addRecommendedBasket(): Promise<void> {
+    if (this.readOnly() || this.state.busy()) return;
+
+    const recommendations = this.quickStartSuggestions();
+    this.quickStartDismissed.set(true);
+    for (const suggestion of recommendations) {
+      await this.state.setQuantity(suggestion.item.id, this.qtyOf(suggestion.item.id) + suggestion.qty);
+    }
   }
 
   protected applyReduction(lineId: string, by: number): void {

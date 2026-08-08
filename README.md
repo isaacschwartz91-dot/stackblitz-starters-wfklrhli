@@ -12,6 +12,14 @@ You need **Node 22.6 or newer** (`node -v` to check). Older versions cannot
 run this — the server uses `node:sqlite` and Node's built-in TypeScript
 support. If you use nvm: `nvm install 22 && nvm use 22`.
 
+### Quick preview
+
+After `npm ci`, run `npm run preview`, then open
+**http://localhost:4000**. This builds the client and starts the full local
+application (both its API and interface) in one command. Set
+`ADMIN_EMAIL` and `ADMIN_PASSWORD` before the first run if you want known
+preview sign-in credentials; the platform-specific examples below show how.
+
 **macOS / Linux:**
 
 ```bash

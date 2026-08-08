@@ -75,11 +75,14 @@ export interface Category {
 
 export interface CategoryRequirement {
   categoryKey: string;
-  /** Integer quarter-servings per member per day. */
+  /**
+   * Optional minimum in integer quarter-servings per member per day. Zero
+   * means no minimum is enforced, which is the current program mode.
+   */
   servingsPerMemberPerDayUnits: number;
   /**
-   * FR-22 (DECIDE): optional per-category ceiling, in quarter-servings per
-   * member per day. Null = no maximum, which is the default.
+   * Per-category ceiling in quarter-servings per member per day. The current
+   * program uses this as the only category constraint.
    */
   maxServingsPerMemberPerDayUnits: number | null;
   /**
