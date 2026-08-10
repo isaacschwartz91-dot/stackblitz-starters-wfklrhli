@@ -404,7 +404,8 @@ export class OrderEditPage {
   protected readonly fixing = signal<OrderLine | null>(null);
   protected readonly fixCandidates = signal<Candidate[]>([]);
   protected readonly chosen = signal<Item | null>(null);
-  protected scope: Scope = 'none';
+  /** Remembering for everyone is the default; `startFix` resets to it each time. */
+  protected scope: Scope = 'global';
 
   protected readonly addingCustomer = signal(false);
   protected newCustomerName = '';
@@ -639,7 +640,10 @@ export class OrderEditPage {
   protected startFix(line: OrderLine): void {
     this.fixing.set(line);
     this.chosen.set(this.itemFor(line));
-    this.scope = 'none';
+    // Teaching the store is the point of correcting a line: the same wording
+    // will arrive again, and it should already be known when it does. A
+    // one-off is the exception, so it is the thing you opt into.
+    this.scope = 'global';
     this.fixCandidates.set(this.orders.candidatesFor(line, this.order().customerId));
   }
 
