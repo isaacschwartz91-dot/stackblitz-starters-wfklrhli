@@ -41,6 +41,31 @@ export interface SheetTable {
   headers: string[];
   /** Data rows, aligned to `headers`. */
   rows: string[][];
+  /**
+   * The spreadsheet row each entry in `rows` came from, numbered the way Excel
+   * numbers them. Blank rows are dropped before import, so without this a
+   * report saying "row 42" would point at the wrong line in the file.
+   *
+   * Optional so a table can still be built by hand; parsing always fills it.
+   */
+  rowNumbers?: number[];
+}
+
+/**
+ * A row that did not become a record, and why.
+ *
+ * The count on its own is useless: nobody can fix a spreadsheet from the fact
+ * that 3,489 rows went missing. The row number has to match the file, the
+ * reason has to be specific, and the contents have to be visible, or there is
+ * nothing to act on.
+ */
+export interface SkippedRow {
+  sheet: string;
+  /** 1-based, as shown in Excel's row gutter. */
+  rowNumber: number;
+  reason: string;
+  /** Non-empty cells, labelled with their headers. */
+  cells: { header: string; value: string }[];
 }
 
 export interface ParsedWorkbook {
@@ -181,9 +206,11 @@ export function readWorkbookBuffer(buffer: ArrayBuffer, fileName: string): Parse
   for (const name of workbook.SheetNames) {
     const sheet = workbook.Sheets[name];
     if (sheet === undefined) continue;
+    // Blank rows are kept at this stage purely so a row's position in the grid
+    // still equals its row number in the file; they are dropped just below.
     const grid = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
       header: 1,
-      blankrows: false,
+      blankrows: true,
       defval: '',
     });
     if (grid.length === 0) continue;
@@ -191,16 +218,20 @@ export function readWorkbookBuffer(buffer: ArrayBuffer, fileName: string): Parse
     const headerRow = findHeaderRow(grid);
     const headers = (grid[headerRow] ?? []).map(cellText);
     const width = headers.length;
-    const rows = grid
-      .slice(headerRow + 1)
-      .map((row) => {
-        const cells: string[] = [];
-        for (let column = 0; column < width; column += 1) cells.push(cellText(row[column]));
-        return cells;
-      })
-      .filter((row) => row.some((cell) => cell !== ''));
 
-    tables.push({ name, headers, rows });
+    const rows: string[][] = [];
+    const rowNumbers: number[] = [];
+    for (let index = headerRow + 1; index < grid.length; index += 1) {
+      const cells: string[] = [];
+      for (let column = 0; column < width; column += 1) cells.push(cellText(grid[index]?.[column]));
+      // A wholly empty line is spacing, not a failed record. Reporting those
+      // as skipped would bury the rows that actually needed attention.
+      if (!cells.some((cell) => cell !== '')) continue;
+      rows.push(cells);
+      rowNumbers.push(index + 1);
+    }
+
+    tables.push({ name, headers, rows, rowNumbers });
   }
 
   return { fileName, tables };
@@ -336,9 +367,28 @@ export interface ItemImportResult {
   /** The aisle walking order this sheet implies, in the order it implies it. */
   derivedAisles: Aisle[];
   skipped: number;
+  /** Every skipped row, with the reason and its contents. */
+  skippedRows: SkippedRow[];
   generatedIds: number;
   /** True when the row order supplied the shelf positions. */
   usedRowOrder: boolean;
+  /** Which column was read as the product name — the usual suspect when rows go missing. */
+  nameHeader: string;
+}
+
+/** Describe a row so someone can recognise it in their own spreadsheet. */
+function describeRow(table: SheetTable, rowIndex: number, reason: string): SkippedRow {
+  const row = table.rows[rowIndex] ?? [];
+  return {
+    sheet: table.name,
+    // Falling back to "header is row 1, data starts at row 2", which is what a
+    // table assembled without row numbers means.
+    rowNumber: table.rowNumbers?.[rowIndex] ?? rowIndex + 2,
+    reason,
+    cells: row
+      .map((value, column) => ({ header: table.headers[column] ?? `Column ${column + 1}`, value }))
+      .filter((cell) => cell.value.trim() !== ''),
+  };
 }
 
 export function buildItems(
@@ -358,14 +408,27 @@ export function buildItems(
   const items: Item[] = [];
   const seen = new Set<string>();
   const aisleFirstSeen = new Map<string, number>();
-  let skipped = 0;
+  const skippedRows: SkippedRow[] = [];
   let generatedIds = 0;
+
+  const nameHeader = nameColumn < 0 ? '' : (table.headers[nameColumn] ?? '');
 
   table.rows.forEach((row, rowIndex) => {
     const cell = (column: number): string => (column < 0 ? '' : (row[column] ?? '').trim());
     const name = cell(nameColumn);
     if (name === '') {
-      skipped += 1;
+      // The only way a product row is refused. Missing ids are generated,
+      // repeated ids are re-derived and an unreadable price becomes blank, so
+      // if a row is gone, this is why.
+      skippedRows.push(
+        describeRow(
+          table,
+          rowIndex,
+          nameColumn < 0
+            ? 'No product name column was found on this sheet.'
+            : `No product name — the “${nameHeader}” cell is empty.`,
+        ),
+      );
       return;
     }
 
@@ -422,12 +485,21 @@ export function buildItems(
         )
   ).map((aisle, position) => ({ id: aisle, sequence: position + 1, name: '' }));
 
-  return { items, derivedAisles, skipped, generatedIds, usedRowOrder: useRowOrder };
+  return {
+    items,
+    derivedAisles,
+    skipped: skippedRows.length,
+    skippedRows,
+    generatedIds,
+    usedRowOrder: useRowOrder,
+    nameHeader,
+  };
 }
 
 export interface AisleImportResult {
   aisles: Aisle[];
   skipped: number;
+  skippedRows: SkippedRow[];
 }
 
 export function buildAisles(table: SheetTable, mapping: SheetField[]): AisleImportResult {
@@ -438,13 +510,30 @@ export function buildAisles(table: SheetTable, mapping: SheetField[]): AisleImpo
 
   const aisles: Aisle[] = [];
   const seen = new Set<string>();
-  let skipped = 0;
+  const skippedRows: SkippedRow[] = [];
+  const aisleHeader = aisleColumn < 0 ? '' : (table.headers[aisleColumn] ?? '');
 
   table.rows.forEach((row, rowIndex) => {
     const cell = (column: number): string => (column < 0 ? '' : (row[column] ?? '').trim());
     const id = cell(aisleColumn);
-    if (id === '' || seen.has(id)) {
-      skipped += 1;
+    // Two different problems, and telling them apart is the whole point: a
+    // blank cell is a gap in the sheet, a repeat is the same aisle listed twice.
+    if (id === '') {
+      skippedRows.push(
+        describeRow(
+          table,
+          rowIndex,
+          aisleColumn < 0
+            ? 'No aisle column was found on this sheet.'
+            : `No aisle code — the “${aisleHeader}” cell is empty.`,
+        ),
+      );
+      return;
+    }
+    if (seen.has(id)) {
+      skippedRows.push(
+        describeRow(table, rowIndex, `Aisle “${id}” is already listed higher up this sheet.`),
+      );
       return;
     }
     seen.add(id);
@@ -457,13 +546,15 @@ export function buildAisles(table: SheetTable, mapping: SheetField[]): AisleImpo
     aisles: aisles
       .sort((a, b) => a.sequence - b.sequence)
       .map((aisle, position) => ({ ...aisle, sequence: position + 1 })),
-    skipped,
+    skipped: skippedRows.length,
+    skippedRows,
   };
 }
 
 export interface CustomerImportResult {
   customers: Customer[];
   skipped: number;
+  skippedRows: SkippedRow[];
   /** How many rows matched a customer the store already had. */
   matchedExisting: number;
 }
@@ -494,14 +585,23 @@ export function buildCustomers(
 
   const customers: Customer[] = [];
   const seen = new Set<string>();
-  let skipped = 0;
+  const skippedRows: SkippedRow[] = [];
+  const nameHeader = nameColumn < 0 ? '' : (table.headers[nameColumn] ?? '');
   let matchedExisting = 0;
 
   table.rows.forEach((row, rowIndex) => {
     const cell = (column: number): string => (column < 0 ? '' : (row[column] ?? '').trim());
     const name = cell(nameColumn);
     if (name === '') {
-      skipped += 1;
+      skippedRows.push(
+        describeRow(
+          table,
+          rowIndex,
+          nameColumn < 0
+            ? 'No customer name column was found on this sheet.'
+            : `No customer name — the “${nameHeader}” cell is empty.`,
+        ),
+      );
       return;
     }
 
@@ -523,7 +623,7 @@ export function buildCustomers(
     });
   });
 
-  return { customers, skipped, matchedExisting };
+  return { customers, skipped: skippedRows.length, skippedRows, matchedExisting };
 }
 
 export const CUSTOMER_FIELD_LABELS: Record<CustomerField | 'ignore', string> = {

@@ -13,6 +13,9 @@ import { DataService, messageOf } from '../core/data.service';
 import { ToastService } from '../core/toast.service';
 import { SelectValue } from '../ui/select-value';
 import type { Aisle, Customer, Item } from '../core/models';
+
+/** Rows listed on screen. Beyond this the pattern is clear and the CSV is better. */
+const SKIPS_SHOWN = 200;
 import {
   AISLE_FIELD_LABELS,
   CUSTOMER_FIELD_LABELS,
@@ -28,6 +31,7 @@ import {
   type SheetField,
   type SheetRole,
   type SheetTable,
+  type SkippedRow,
 } from './sheet-parse';
 
 interface SheetPlan {
@@ -173,6 +177,57 @@ interface SheetPlan {
           <button type="button" class="ghost" (click)="reset()">Cancel</button>
         </div>
       }
+
+      @if (skipped().length > 0) {
+        <div class="notice warn" style="margin-top: 1rem">
+          <div class="card-head" style="margin: 0">
+            <strong>{{ skipped().length }} rows were not imported</strong>
+            <span class="spacer"></span>
+            <button type="button" class="small" (click)="downloadSkipped()">Download as CSV</button>
+            <button type="button" class="small ghost" (click)="skipped.set([])">Dismiss</button>
+          </div>
+
+          @if (skipDiagnosis(); as diagnosis) {
+            <p class="small" style="margin: 0.6rem 0 0">{{ diagnosis }}</p>
+          }
+
+          <h4 class="small" style="margin: 0.9rem 0 0.3rem">Why</h4>
+          <ul class="small" style="margin: 0; padding-left: 1.1rem">
+            @for (group of skipReasons(); track group.reason) {
+              <li>{{ group.count }} × {{ group.reason }}</li>
+            }
+          </ul>
+
+          <h4 class="small" style="margin: 0.9rem 0 0.3rem">
+            Rows
+            @if (skipped().length > shownSkips().length) {
+              <span class="dim">(first {{ shownSkips().length }})</span>
+            }
+          </h4>
+          <div class="table-wrap" style="max-height: 320px; overflow: auto">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width: 5rem">Row</th>
+                  <th style="width: 7rem">Sheet</th>
+                  <th style="width: 16rem">Problem</th>
+                  <th>What was in the row</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (row of shownSkips(); track row.sheet + '#' + row.rowNumber) {
+                  <tr>
+                    <td class="num tabular small">{{ row.rowNumber }}</td>
+                    <td class="small dim">{{ row.sheet }}</td>
+                    <td class="small">{{ row.reason }}</td>
+                    <td class="small dim">{{ rowText(row) }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+      }
     </div>
   `,
 })
@@ -187,6 +242,83 @@ export class SheetImport {
   protected readonly canCommit = computed(() =>
     this.plans().some((plan) => plan.role !== 'skip' && this.planProblem(plan) === null),
   );
+
+  /** Rows the last import refused, kept until dismissed. */
+  protected readonly skipped = signal<SkippedRow[]>([]);
+
+  /** Enough rows to recognise the pattern; the CSV has the rest. */
+  protected readonly shownSkips = computed(() => this.skipped().slice(0, SKIPS_SHOWN));
+
+  protected readonly skipReasons = computed(() => {
+    const counts = new Map<string, number>();
+    for (const row of this.skipped()) counts.set(row.reason, (counts.get(row.reason) ?? 0) + 1);
+    return [...counts.entries()]
+      .map(([reason, count]) => ({ reason, count }))
+      .sort((a, b) => b.count - a.count);
+  });
+
+  /**
+   * A count is a symptom; this is an attempt at the cause.
+   *
+   * Thousands of rows missing a product name almost never means thousands of
+   * broken rows — it usually means the wrong column was read as the name, and
+   * the fix is one dropdown away rather than an afternoon in Excel.
+   */
+  protected readonly skipDiagnosis = computed(() => {
+    const rows = this.skipped();
+    if (rows.length === 0) return '';
+
+    const missingName = rows.filter((row) => row.reason.startsWith('No product name'));
+    if (missingName.length < rows.length / 2) return '';
+
+    const header = /“(.+)”/.exec(missingName[0]?.reason ?? '')?.[1] ?? '';
+    const withOtherData = missingName.filter((row) => row.cells.length > 0).length;
+
+    if (withOtherData > missingName.length / 2 && header !== '') {
+      return (
+        `${withOtherData} of these rows have data in other columns but nothing in “${header}”. ` +
+        `That usually means “${header}” is not the column holding your product names — ` +
+        `upload again and set the right column to “Item name” in the dropdowns above.`
+      );
+    }
+    return 'These rows were blank in the product name column, so there was nothing to add to the catalog.';
+  });
+
+  protected rowText(row: SkippedRow): string {
+    if (row.cells.length === 0) return '(every cell was empty)';
+    return row.cells.map((cell) => `${cell.header}: ${cell.value}`).join(' · ');
+  }
+
+  /** The whole report, in something a spreadsheet can open. */
+  protected downloadSkipped(): void {
+    const rows = this.skipped();
+    const headers = [...new Set(rows.flatMap((row) => row.cells.map((cell) => cell.header)))];
+    const escape = (value: string): string => `"${value.replace(/"/g, '""')}"`;
+
+    const lines = [
+      ['Row', 'Sheet', 'Problem', ...headers].map(escape).join(','),
+      ...rows.map((row) => {
+        const byHeader = new Map(row.cells.map((cell) => [cell.header, cell.value]));
+        return [
+          String(row.rowNumber),
+          row.sheet,
+          row.reason,
+          ...headers.map((header) => byHeader.get(header) ?? ''),
+        ]
+          .map(escape)
+          .join(',');
+      }),
+    ];
+
+    const url = URL.createObjectURL(
+      new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' }),
+    );
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'skipped-rows.csv';
+    link.click();
+    URL.revokeObjectURL(url);
+  }
 
   protected value(event: Event): string {
     return (event.target as HTMLSelectElement).value;
@@ -358,8 +490,8 @@ export class SheetImport {
       let aisles: Aisle[] | null = null;
       let derivedAisles: Aisle[] | null = null;
       let generatedIds = 0;
-      let skipped = 0;
       let usedRowOrder = false;
+      const skippedRows: SkippedRow[] = [];
 
       for (const plan of this.plans()) {
         if (this.planProblem(plan) !== null) continue;
@@ -369,19 +501,20 @@ export class SheetImport {
           });
           items.push(...result.items);
           generatedIds += result.generatedIds;
-          skipped += result.skipped;
+          skippedRows.push(...result.skippedRows);
           usedRowOrder = usedRowOrder || result.usedRowOrder;
           if (result.derivedAisles.length > 0) derivedAisles = result.derivedAisles;
         } else if (plan.role === 'aisles') {
           const result = buildAisles(plan.table, plan.mapping);
           aisles = [...(aisles ?? []), ...result.aisles];
-          skipped += result.skipped;
+          skippedRows.push(...result.skippedRows);
         } else if (plan.role === 'customers') {
           const result = buildCustomers(plan.table, plan.mapping, this.data.customers());
           customers.push(...result.customers);
-          skipped += result.skipped;
+          skippedRows.push(...result.skippedRows);
         }
       }
+      const skipped = skippedRows.length;
 
       const before = new Set(this.data.items().map((item) => item.id));
       const customersBefore = new Set(this.data.customers().map((customer) => customer.id));
@@ -405,6 +538,7 @@ export class SheetImport {
       // screen can do — it sends someone hunting through their database for
       // rows that were never written. Say so instead, and say why.
       if (items.length === 0 && customers.length === 0 && savedAisles === 0) {
+        this.skipped.set(skippedRows);
         this.toast.warn(this.nothingSavedReason());
         return;
       }
@@ -425,6 +559,9 @@ export class SheetImport {
 
       this.toast.ok(`Imported: ${notes.join(' · ')}`);
       this.reset();
+      // Survives the reset on purpose: the report is the only record of what
+      // did not make it, and it is needed after the import, not during it.
+      this.skipped.set(skippedRows);
     } catch (cause) {
       this.toast.error(`Import failed: ${messageOf(cause)}`);
     } finally {

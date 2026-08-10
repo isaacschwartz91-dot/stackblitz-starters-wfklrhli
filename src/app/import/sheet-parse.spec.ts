@@ -270,6 +270,18 @@ describe('buildCustomers', () => {
     expect(customers).toHaveLength(1);
     expect(skipped).toBe(1);
   });
+
+  it('reports the customer row it could not use, and what was on it', () => {
+    const headers = ['Name', 'Phone'];
+    const { skippedRows } = buildCustomers(
+      table(headers, [['', '555-0134']]),
+      guessCustomerMapping(headers),
+    );
+
+    expect(skippedRows[0].rowNumber).toBe(2);
+    expect(skippedRows[0].reason).toContain('No customer name');
+    expect(skippedRows[0].cells).toEqual([{ header: 'Phone', value: '555-0134' }]);
+  });
 });
 
 describe('buildItems', () => {
@@ -337,6 +349,67 @@ describe('buildItems', () => {
     );
     expect(items).toHaveLength(1);
     expect(skipped).toBe(1);
+  });
+
+  /**
+   * A count alone cannot be acted on. These pin down the three things someone
+   * needs in order to go and fix their spreadsheet: where the row is, what was
+   * wrong with it, and what it contained.
+   */
+  describe('reporting what was skipped', () => {
+    it('names the row, the reason and the column that was empty', () => {
+      const { skippedRows } = buildItems(
+        table(headers, [
+          ['1', 'Bread', '', '', '2', '1', ''],
+          ['2', '', 'Farmland', '', '3', '2', ''],
+        ]),
+        mapping,
+      );
+
+      expect(skippedRows).toHaveLength(1);
+      // Header is row 1, so the second data row is row 3 in the file.
+      expect(skippedRows[0].rowNumber).toBe(3);
+      expect(skippedRows[0].reason).toContain('No product name');
+      expect(skippedRows[0].reason).toContain('item_name');
+    });
+
+    it('shows what the row actually held, so it can be found in the sheet', () => {
+      const { skippedRows } = buildItems(
+        table(headers, [['sku-9', '', 'Farmland', '1 gal', '', '', '']]),
+        mapping,
+      );
+
+      expect(skippedRows[0].cells).toEqual([
+        { header: 'item_id', value: 'sku-9' },
+        { header: 'brand', value: 'Farmland' },
+        { header: 'size', value: '1 gal' },
+      ]);
+    });
+
+    it('counts a row number against the file, not against the rows that survived', () => {
+      // Rows 2 and 5 of the file; 3 and 4 were blank and dropped when reading.
+      const parsed: SheetTable = {
+        name: 'Sheet1',
+        headers,
+        rows: [
+          ['1', 'Bread', '', '', '2', '1', ''],
+          ['2', '', '', '', '3', '2', ''],
+        ],
+        rowNumbers: [2, 5],
+      };
+
+      expect(buildItems(parsed, mapping).skippedRows[0].rowNumber).toBe(5);
+    });
+
+    it('says so plainly when the sheet has no product name column at all', () => {
+      const noName = ['item_id', 'brand'];
+      const { skippedRows } = buildItems(table(noName, [['1', 'Farmland']]), [
+        'item_id',
+        'brand',
+      ]);
+
+      expect(skippedRows[0].reason).toBe('No product name column was found on this sheet.');
+    });
   });
 
   describe('a plain sheet in shelf order, with nothing else in it', () => {
@@ -489,6 +562,24 @@ describe('buildAisles', () => {
     );
     expect(aisles.map((aisle) => aisle.id)).toEqual(['3', '1']);
   });
+
+  it('tells a blank aisle apart from one listed twice', () => {
+    const headers = ['Aisle', 'Aisle Name'];
+    const { skippedRows } = buildAisles(
+      table(headers, [
+        ['3', 'Dairy'],
+        ['', 'Nowhere'],
+        ['3', 'Dairy again'],
+      ]),
+      guessAisleMapping(headers),
+    );
+
+    expect(skippedRows).toHaveLength(2);
+    expect(skippedRows[0].rowNumber).toBe(3);
+    expect(skippedRows[0].reason).toContain('No aisle code');
+    expect(skippedRows[1].rowNumber).toBe(4);
+    expect(skippedRows[1].reason).toContain('already listed');
+  });
 });
 
 describe('readWorkbook', () => {
@@ -500,6 +591,46 @@ describe('readWorkbook', () => {
     const buffer = XLSX.write(book, { type: 'array', bookType: 'xlsx' }) as ArrayBuffer;
     return new File([buffer], fileName);
   }
+
+  it('reports row numbers that match the file, blank rows and all', async () => {
+    // Blank lines are ordinary in a hand-kept sheet. If they shifted the
+    // numbering, every row in the report would point at the wrong line.
+    const file = workbookFile({
+      Items: [
+        ['item_id', 'item_name', 'brand'],
+        ['1', 'Bread', ''],
+        [],
+        [],
+        ['2', '', 'Farmland'],
+      ],
+    });
+
+    const parsed = await readWorkbook(file);
+    const { items, skippedRows } = buildItems(
+      parsed.tables[0],
+      guessItemMapping(parsed.tables[0].headers),
+    );
+
+    expect(items).toHaveLength(1);
+    expect(skippedRows).toHaveLength(1);
+    expect(skippedRows[0].rowNumber).toBe(5);
+    expect(skippedRows[0].cells).toEqual([
+      { header: 'item_id', value: '2' },
+      { header: 'brand', value: 'Farmland' },
+    ]);
+  });
+
+  it('does not report blank spacing lines as failures', async () => {
+    const file = workbookFile({
+      Items: [['item_id', 'item_name'], ['1', 'Bread'], [], [], ['2', 'Milk']],
+    });
+
+    const parsed = await readWorkbook(file);
+    const result = buildItems(parsed.tables[0], guessItemMapping(parsed.tables[0].headers));
+
+    expect(result.items).toHaveLength(2);
+    expect(result.skippedRows).toEqual([]);
+  });
 
   it('reads both sheets out of one uploaded workbook', async () => {
     const file = workbookFile({
