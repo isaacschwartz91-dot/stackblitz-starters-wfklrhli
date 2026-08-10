@@ -10,6 +10,7 @@
 import { Injectable, computed, signal } from '@angular/core';
 
 import type { Backend, ClearScope } from './backend';
+import { lastSoldByItem } from './last-sold';
 import { LocalBackend } from './local-backend';
 import { SupabaseBackend, readStoredConfig } from './supabase-backend';
 import { runtimeConfig } from './runtime-config';
@@ -52,6 +53,9 @@ export class DataService {
   readonly matchIndex = computed(() => buildMatchIndex(this.items(), this.aliases()));
 
   readonly itemsById = computed(() => new Map(this.items().map((item) => [item.id, item])));
+
+  /** item id -> ISO date it last sold on. See `lastSoldByItem` for the rules. */
+  readonly lastSoldByItem = computed(() => lastSoldByItem(this.orders(), this.orderLines()));
 
   readonly sortedAisles = computed(() =>
     [...this.aisles()].sort((a, b) => a.sequence - b.sequence),

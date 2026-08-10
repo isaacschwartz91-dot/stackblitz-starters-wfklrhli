@@ -121,6 +121,7 @@ const PAGE_SIZE = 60;
                 <th style="width: 6rem" class="num">Shelf</th>
                 <th style="width: 6rem" class="num">Price</th>
                 <th style="width: 9rem">UPC</th>
+                <th style="width: 7rem">Last sold</th>
                 <th style="width: 5rem"></th>
               </tr>
             </thead>
@@ -155,6 +156,13 @@ const PAGE_SIZE = 60;
                       {{ item.barcode }}
                     } @else {
                       <span class="dim">—</span>
+                    }
+                  </td>
+                  <td class="small tabular">
+                    @if (lastSold(item); as sold) {
+                      <span [title]="sold.exact">{{ sold.label }}</span>
+                    } @else {
+                      <span class="dim">Never</span>
                     }
                   </td>
                   <td>
@@ -345,6 +353,21 @@ export class CatalogPage {
   /** Same currency symbol the order screens use, set in Settings. */
   protected money(amount: number): string {
     return `${this.data.settings().currencySymbol}${amount.toFixed(2)}`;
+  }
+
+  /**
+   * When this product last went out, or null if it never has.
+   *
+   * Shown as a plain date; the full timestamp is on the tooltip, since
+   * "which of these two went out first today" is a real question and a date
+   * alone cannot answer it.
+   */
+  protected lastSold(item: Item): { label: string; exact: string } | null {
+    const when = this.data.lastSoldByItem().get(item.id);
+    if (when === undefined || when === '') return null;
+    const date = new Date(when);
+    if (Number.isNaN(date.getTime())) return null;
+    return { label: date.toLocaleDateString(), exact: date.toLocaleString() };
   }
 
   protected numberOrNull(event: Event): number | null {
