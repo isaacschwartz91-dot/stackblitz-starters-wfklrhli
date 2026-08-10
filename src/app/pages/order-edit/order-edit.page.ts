@@ -168,6 +168,8 @@ type Scope = 'none' | 'customer' | 'global';
                   <th style="width: 5.5rem">Qty</th>
                   <th style="width: 5.5rem">Unit</th>
                   <th>Matched product</th>
+                  <th class="num" style="width: 7rem">Price</th>
+                  <th style="width: 9rem">UPC</th>
                   <th style="width: 9rem">Where</th>
                   <th style="width: 7rem"></th>
                 </tr>
@@ -214,6 +216,27 @@ type Scope = 'none' | 'customer' | 'global';
                         <div class="small dim">Pick the right product →</div>
                       }
                     </td>
+                    <td class="num small tabular">
+                      @if (itemFor(line); as item) {
+                        @if (item.price !== null) {
+                          <div>{{ money(item.price) }}</div>
+                          @if (line.qty !== 1) {
+                            <div class="dim">{{ money(item.price * line.qty) }}</div>
+                          }
+                        } @else {
+                          <span class="dim">—</span>
+                        }
+                      } @else {
+                        <span class="dim">—</span>
+                      }
+                    </td>
+                    <td class="small tabular">
+                      @if (barcodeOf(line); as code) {
+                        {{ code }}
+                      } @else {
+                        <span class="dim">—</span>
+                      }
+                    </td>
                     <td class="small dim">{{ where(line) }}</td>
                     <td>
                       <div class="button-row" style="gap: 0.25rem">
@@ -249,6 +272,16 @@ type Scope = 'none' | 'customer' | 'global';
         </button>
         <button type="button" (click)="save(false)" [disabled]="saving()">Save draft</button>
         <span class="spacer"></span>
+        @if (orderTotal(); as sum) {
+          @if (sum.priced > 0) {
+            <span class="small dim" style="margin-right: 0.8rem">
+              {{ money(sum.total) }}
+              @if (sum.unpriced > 0) {
+                <span>({{ sum.unpriced }} without a price)</span>
+              }
+            </span>
+          }
+        }
         <span class="small dim">{{ matchedCount() }}/{{ lines().length }} matched</span>
       </div>
     </div>
@@ -424,6 +457,39 @@ export class OrderEditPage {
   protected detail(item: Item): string {
     return itemDetail(item);
   }
+
+  /** Formatted with the store's own currency symbol, set in Settings. */
+  protected money(amount: number): string {
+    return `${this.data.settings().currencySymbol}${amount.toFixed(2)}`;
+  }
+
+  protected barcodeOf(line: OrderLine): string {
+    const code = this.itemFor(line)?.barcode.trim() ?? '';
+    return code;
+  }
+
+  /**
+   * What the priced lines come to.
+   *
+   * A price column is only worth reading if it adds up to something, but a
+   * catalog rarely prices everything — so the count of unpriced lines travels
+   * with the total rather than being folded into it as zero.
+   */
+  protected readonly orderTotal = computed(() => {
+    let total = 0;
+    let priced = 0;
+    let unpriced = 0;
+    for (const line of this.lines()) {
+      const price = this.itemFor(line)?.price ?? null;
+      if (price === null) {
+        unpriced += 1;
+        continue;
+      }
+      total += price * line.qty;
+      priced += 1;
+    }
+    return { total, priced, unpriced };
+  });
 
   protected sourceLabel(line: OrderLine): string {
     return MATCH_SOURCE_LABEL[line.matchSource];
