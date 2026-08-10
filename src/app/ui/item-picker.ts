@@ -9,7 +9,6 @@ import { ChangeDetectionStrategy, Component, ElementRef, computed, inject, input
 
 import { DataService } from '../core/data.service';
 import type { Item } from '../core/models';
-import { itemDetail } from '../core/models';
 import { searchItems } from '../matching/matcher';
 import { aisleKey, aisleLabel } from '../matching/pick-list';
 
@@ -36,6 +35,12 @@ const VISIBLE_SUGGESTIONS = 25;
 
       @if (open() && results().length > 0) {
         <div class="suggestions" role="listbox">
+          <div class="suggestion-head">
+            <span>Product</span>
+            <span>Size</span>
+            <span>UPC</span>
+            <span>Where</span>
+          </div>
           @for (result of results(); track result.item.id; let index = $index) {
             <button
               type="button"
@@ -46,10 +51,12 @@ const VISIBLE_SUGGESTIONS = 25;
             >
               <span>
                 <strong>{{ result.item.name }}</strong>
-                @if (detail(result.item)) {
-                  <span class="dim small"> · {{ detail(result.item) }}</span>
+                @if (result.item.brand) {
+                  <span class="dim small"> · {{ result.item.brand }}</span>
                 }
               </span>
+              <span class="s-size small dim">{{ result.item.size || '—' }}</span>
+              <span class="s-upc small dim tabular">{{ result.item.barcode || '—' }}</span>
               <span class="where">{{ where(result.item) }}</span>
             </button>
           }
@@ -98,10 +105,6 @@ export class ItemPicker {
 
   focus(): void {
     this.box()?.nativeElement.focus();
-  }
-
-  protected detail(item: Item): string {
-    return itemDetail(item);
   }
 
   protected where(item: Item): string {

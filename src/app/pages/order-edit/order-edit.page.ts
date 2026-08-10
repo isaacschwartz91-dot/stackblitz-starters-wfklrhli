@@ -298,6 +298,12 @@ type Scope = 'none' | 'customer' | 'global';
           @if (fixCandidates().length > 0) {
             <div class="small muted" style="margin-bottom: 0.3rem">Closest products</div>
             <div class="suggestions" style="position: static; box-shadow: none; margin-bottom: 0.8rem">
+              <div class="suggestion-head">
+                <span>Product</span>
+                <span>Size</span>
+                <span>UPC</span>
+                <span></span>
+              </div>
               @for (candidate of fixCandidates(); track candidate.item.id) {
                 <button
                   type="button"
@@ -307,8 +313,12 @@ type Scope = 'none' | 'customer' | 'global';
                 >
                   <span>
                     <strong>{{ candidate.item.name }}</strong>
-                    <span class="dim small"> · {{ detail(candidate.item) }}</span>
+                    @if (candidate.item.brand) {
+                      <span class="dim small"> · {{ candidate.item.brand }}</span>
+                    }
                   </span>
+                  <span class="s-size small dim">{{ candidate.item.size || '—' }}</span>
+                  <span class="s-upc small dim tabular">{{ candidate.item.barcode || '—' }}</span>
                   <span class="where">{{ percent(candidate.score) }}</span>
                 </button>
               }

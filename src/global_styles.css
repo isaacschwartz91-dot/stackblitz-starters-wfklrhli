@@ -684,9 +684,14 @@ td select {
   padding: 0.2rem;
 }
 
+/*
+ * A grid, not a flex row: size and UPC line up down the list, which is what
+ * makes two variants of the same product comparable at a glance rather than
+ * something you read twice.
+ */
 .suggestion {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 5.5rem 8.5rem auto;
   gap: 0.6rem;
   align-items: center;
   width: 100%;
@@ -697,6 +702,40 @@ td select {
   border-radius: var(--radius-sm);
   min-height: 0;
   font-weight: 500;
+}
+
+.suggestion > * {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Column headings above the list, sharing its track sizes. */
+.suggestion-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 5.5rem 8.5rem auto;
+  gap: 0.6rem;
+  padding: 0.15rem 0.55rem 0.3rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+/* Too narrow for four tracks: stack the detail under the name instead. */
+@media (max-width: 560px) {
+  .suggestion {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .suggestion .s-size,
+  .suggestion .s-upc {
+    grid-column: 1;
+    white-space: normal;
+  }
+  .suggestion-head {
+    display: none;
+  }
 }
 
 .suggestion:hover,
