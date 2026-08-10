@@ -745,13 +745,28 @@ td select {
 
 /* ------------------------------------------------------------------ logo -- */
 
-/* Height-bound so any shape of logo fits the bar; width follows the image. */
+/*
+ * Height-bound so any shape of logo fits the bar; width follows the image.
+ *
+ * `max-width` has to leave room for the height to be reached. A wordmark is
+ * often three or four times as wide as it is tall, and `object-fit: contain`
+ * would quietly letterbox it — the image would obey the width and never grow
+ * to the height it was given, which looks like the height was ignored.
+ */
 .brand-logo {
-  height: 28px;
+  height: 72px;
   width: auto;
-  max-width: 160px;
+  max-width: 340px;
   object-fit: contain;
   display: block;
+}
+
+/* A sticky header 72px tall eats a phone screen; the logo still leads. */
+@media (max-width: 720px) {
+  .brand-logo {
+    height: 48px;
+    max-width: 220px;
+  }
 }
 
 .logo-row {
