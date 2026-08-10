@@ -14,6 +14,10 @@ export interface RuntimeConfig {
   supabaseUrl: string;
   supabaseAnonKey: string;
   storeName: string;
+  /** Short commit this build came from, written by the deploy. */
+  commit: string;
+  branch: string;
+  builtAt: string;
 }
 
 let loaded: RuntimeConfig | null = null;
@@ -28,6 +32,9 @@ export async function loadRuntimeConfig(): Promise<void> {
       supabaseUrl: String(parsed.supabaseUrl ?? '').trim(),
       supabaseAnonKey: String(parsed.supabaseAnonKey ?? '').trim(),
       storeName: String(parsed.storeName ?? '').trim(),
+      commit: String(parsed.commit ?? '').trim(),
+      branch: String(parsed.branch ?? '').trim(),
+      builtAt: String(parsed.builtAt ?? '').trim(),
     };
   } catch {
     // No config.json is the normal case for a plain static deploy.

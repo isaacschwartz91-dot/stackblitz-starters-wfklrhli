@@ -16,6 +16,7 @@ import { SheetSyncService } from '../../import/sheet-sync.service';
 import { LockService } from '../../core/lock.service';
 import { demoSnapshot, DEMO_ORDER_TEXT } from '../../seed/demo-data';
 import { SelectValue } from '../../ui/select-value';
+import { runtimeConfig } from '../../core/runtime-config';
 
 @Component({
   selector: 'app-settings',
@@ -455,6 +456,28 @@ import { SelectValue } from '../../ui/select-value';
           </p>
         </div>
 
+        <!-- Which build this is --------------------------------------------- -->
+        <div class="card">
+          <div class="card-head"><h2>This version</h2></div>
+          <p class="small muted">
+            Quote this when a change does not seem to have arrived. It says which build the
+            browser is running, which is the difference between a deploy that has not happened
+            and a page that came out of the cache.
+          </p>
+          <table style="margin-top: 0.6rem">
+            <tbody>
+              <tr>
+                <td class="small dim" style="width: 8rem">Build</td>
+                <td class="small tabular">{{ buildLabel() }}</td>
+              </tr>
+              <tr>
+                <td class="small dim">Storage</td>
+                <td class="small">{{ data.backend.describe }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
         <!-- Stats ---------------------------------------------------------- -->
         <div class="card">
           <div class="card-head"><h2>At a glance</h2></div>
@@ -588,6 +611,21 @@ export class SettingsPage {
   protected readonly supabaseKey = signal(readStoredConfig()?.anonKey ?? '');
 
   protected readonly demoItemCount = demoSnapshot().items.length;
+
+  /**
+   * The build the browser is actually running.
+   *
+   * A deploy that never happened and a cached page look the same from the
+   * outside; this is the one thing that tells them apart.
+   */
+  protected readonly buildLabel = computed(() => {
+    const config = runtimeConfig();
+    if (config === null || config.commit === '') {
+      return 'Unknown — this copy was built without deploy information.';
+    }
+    const when = config.builtAt === '' ? '' : new Date(config.builtAt).toLocaleString();
+    return [config.commit, config.branch, when].filter((part) => part !== '').join(' · ');
+  });
 
   // -- Deleting data ---------------------------------------------------------
 
