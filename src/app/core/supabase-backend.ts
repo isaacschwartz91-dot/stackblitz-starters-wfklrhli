@@ -9,7 +9,7 @@
  * Nothing here uses the service-role key — it must never reach a browser.
  */
 
-import type { Backend, AuthBackend } from './backend';
+import type { Backend, AuthBackend, ClearScope } from './backend';
 import type {
   AppSettings,
   Aisle,
@@ -35,6 +35,13 @@ const CONFIG_KEY = 'grocery-picker.supabase-config';
 const DISCONNECTED_KEY = 'grocery-picker.supabase-disconnected';
 /** Rows per read. Matches the default PostgREST `max-rows`, so no page is short by surprise. */
 const SELECT_PAGE_SIZE = 1000;
+
+/** The one table a scoped clear deletes from; foreign keys take care of the rest. */
+const SCOPE_TABLE: Record<Exclude<ClearScope, 'everything'>, string> = {
+  items: 'items',
+  customers: 'customers',
+  orders: 'orders',
+};
 
 interface StoredSession {
   accessToken: string;
@@ -520,8 +527,19 @@ export class SupabaseBackend implements Backend, AuthBackend {
     await this.upsert('app_settings', [{ id: 1, value: settings }]);
   }
 
-  async clearAll(): Promise<void> {
-    for (const table of ['order_lines', 'orders', 'aliases', 'customers', 'items', 'aisles']) {
+  /**
+   * The schema's `on delete cascade` does most of this: dropping items takes
+   * their aliases with it, dropping customers takes their private shorthand,
+   * dropping orders takes their lines. Only the everything case has to name
+   * each table, and then only to control the order.
+   */
+  async clear(scope: ClearScope): Promise<void> {
+    const tables =
+      scope === 'everything'
+        ? ['order_lines', 'orders', 'aliases', 'customers', 'items', 'aisles']
+        : [SCOPE_TABLE[scope]];
+
+    for (const table of tables) {
       const response = await this.request(`${table}?id=neq.__none__`, {
         method: 'DELETE',
         headers: this.headers({ Prefer: 'return=minimal' }),

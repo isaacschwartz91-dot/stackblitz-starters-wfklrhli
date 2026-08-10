@@ -38,9 +38,31 @@ export interface Backend {
 
   saveSettings(settings: AppSettings): Promise<void>;
 
-  /** Wipe everything — used by "restore from backup" and the demo reset. */
-  clearAll(): Promise<void>;
+  /** Delete one kind of data, or all of it. See `ClearScope`. */
+  clear(scope: ClearScope): Promise<void>;
 }
+
+/**
+ * What a "clear" removes.
+ *
+ * These are not independent, and the dependencies are not a choice — they
+ * follow from the foreign keys. Deleting a product deletes the shorthand that
+ * points at it, because shorthand for a product that no longer exists cannot
+ * be honoured. Both backends must agree on this: Postgres gets it from
+ * `on delete cascade`, and the browser backend reproduces it by hand.
+ *
+ *   items      — every product, and therefore every learned alias.
+ *                Orders keep their history; their lines simply lose the link
+ *                to a product.
+ *   customers  — every customer, and their customer-specific shorthand.
+ *                Store-wide shorthand survives, and so do past orders, which
+ *                are left without a customer attached.
+ *   orders     — every order and its lines. Catalog, customers and shorthand
+ *                are untouched.
+ *   everything — all of the above plus the walking order. Settings survive,
+ *                because erasing data is not the same as un-configuring the app.
+ */
+export type ClearScope = 'items' | 'customers' | 'orders' | 'everything';
 
 /** Authentication, when the backend provides it. */
 export interface AuthBackend {

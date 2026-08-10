@@ -9,6 +9,7 @@ import { AuthService } from '../../core/auth.service';
 import { DataService, messageOf } from '../../core/data.service';
 import { SupabaseBackend, readStoredConfig, writeStoredConfig } from '../../core/supabase-backend';
 import { ToastService } from '../../core/toast.service';
+import type { ClearScope } from '../../core/backend';
 import type { AppSettings, LinkedSheet, Snapshot } from '../../core/models';
 import { newId } from '../../core/ids';
 import { SheetSyncService } from '../../import/sheet-sync.service';
@@ -405,9 +406,6 @@ import { SelectValue } from '../../ui/select-value';
 
           <div class="button-row">
             <button type="button" (click)="loadDemo()" [disabled]="busy()">Load demo store</button>
-            <button type="button" class="danger" (click)="wipe()" [disabled]="busy()">
-              Erase everything
-            </button>
           </div>
           <p class="small dim" style="margin-top: 0.6rem">
             The demo store has {{ demoItemCount }} products across 8 aisles, three customers and
@@ -424,6 +422,37 @@ import { SelectValue } from '../../ui/select-value';
               >
             </details>
           }
+        </div>
+
+        <!-- Delete data ------------------------------------------------------ -->
+        <div class="card">
+          <div class="card-head"><h2>Delete data</h2></div>
+          <p class="small muted">
+            Each button deletes one kind of data and leaves the rest alone. You will be shown
+            exactly what goes and what stays before anything is deleted.
+          </p>
+
+          <div class="button-row" style="margin-top: 0.9rem">
+            <button type="button" (click)="askClear('items')" [disabled]="busy()">
+              Delete products
+            </button>
+            <button type="button" (click)="askClear('customers')" [disabled]="busy()">
+              Delete customers
+            </button>
+            <button type="button" (click)="askClear('orders')" [disabled]="busy()">
+              Delete orders
+            </button>
+            <span class="spacer"></span>
+            <button type="button" class="danger" (click)="askClear('everything')" [disabled]="busy()">
+              Erase everything
+            </button>
+          </div>
+
+          <p class="small dim" style="margin-top: 0.7rem">
+            Re-uploading a sheet does not need any of these: an upload updates products it already
+            knows and adds the rest. Delete products only when the catalog itself should start
+            empty.
+          </p>
         </div>
 
         <!-- Stats ---------------------------------------------------------- -->
@@ -474,6 +503,65 @@ import { SelectValue } from '../../ui/select-value';
         </div>
       </div>
     </div>
+
+    @if (clearPlan(); as plan) {
+      <div class="modal-backdrop" (click)="cancelClear()">
+        <div class="modal" (click)="$event.stopPropagation()" role="dialog" aria-modal="true">
+          <h2>{{ plan.title }}</h2>
+
+          <p class="small muted">This cannot be undone.</p>
+
+          <h3 class="small" style="margin: 0.9rem 0 0.3rem">Deleted</h3>
+          <ul class="consequences gone">
+            @for (line of plan.removes; track line) {
+              <li>{{ line }}</li>
+            }
+          </ul>
+
+          @if (plan.keeps.length > 0) {
+            <h3 class="small" style="margin: 0.9rem 0 0.3rem">Kept</h3>
+            <ul class="consequences kept">
+              @for (line of plan.keeps; track line) {
+                <li>{{ line }}</li>
+              }
+            </ul>
+          }
+
+          <label class="check" style="margin: 1rem 0 0.4rem">
+            <input
+              type="checkbox"
+              [checked]="backupFirst()"
+              (change)="backupFirst.set(!backupFirst())"
+            />
+            <span>Download a backup first</span>
+          </label>
+
+          @if (plan.scope === 'everything') {
+            <label class="field" style="margin-top: 0.6rem">
+              <span>Type ERASE to confirm</span>
+              <input
+                type="text"
+                autocomplete="off"
+                [value]="typed()"
+                (input)="typed.set(inputValue($event))"
+              />
+            </label>
+          }
+
+          <div class="button-row" style="margin-top: 1rem">
+            <button
+              type="button"
+              class="danger"
+              [disabled]="busy() || !clearAllowed()"
+              (click)="confirmClear()"
+            >
+              {{ plan.action }}
+            </button>
+            <button type="button" class="ghost" (click)="cancelClear()">Cancel</button>
+          </div>
+        </div>
+      </div>
+    }
   `,
 })
 export class SettingsPage {
@@ -500,6 +588,100 @@ export class SettingsPage {
   protected readonly supabaseKey = signal(readStoredConfig()?.anonKey ?? '');
 
   protected readonly demoItemCount = demoSnapshot().items.length;
+
+  // -- Deleting data ---------------------------------------------------------
+
+  protected readonly pendingScope = signal<ClearScope | null>(null);
+  protected readonly backupFirst = signal(true);
+  protected readonly typed = signal('');
+
+  /**
+   * Spelled out from the live counts, so the warning cannot drift from what
+   * the buttons actually do. The knock-on effects are the important part: the
+   * shorthand that disappears with a catalog is exactly the sort of thing
+   * people only discover afterwards.
+   */
+  protected readonly clearPlan = computed(() => {
+    const scope = this.pendingScope();
+    if (scope === null) return null;
+
+    const items = this.data.items().length;
+    const customers = this.data.customers().length;
+    const orders = this.data.orders().length;
+    const aliases = this.data.aliases();
+    const privateAliases = aliases.filter((alias) => alias.customerId !== null).length;
+    const globalAliases = aliases.length - privateAliases;
+    const plural = (count: number, one: string, many = `${one}s`) =>
+      `${count} ${count === 1 ? one : many}`;
+
+    if (scope === 'items') {
+      return {
+        scope,
+        title: 'Delete every product?',
+        action: 'Delete products',
+        removes: [
+          `${plural(items, 'product')} — the whole catalog.`,
+          `${plural(aliases.length, 'piece', 'pieces')} of learned shorthand. Shorthand points at a product, so none of it can outlive the catalog.`,
+        ],
+        keeps: [
+          `${plural(customers, 'customer')}.`,
+          `${plural(orders, 'order')}, kept as history. Their lines will no longer link to a product.`,
+          'The walking order.',
+        ],
+      };
+    }
+
+    if (scope === 'customers') {
+      return {
+        scope,
+        title: 'Delete every customer?',
+        action: 'Delete customers',
+        removes: [
+          `${plural(customers, 'customer')}.`,
+          `${plural(privateAliases, 'piece', 'pieces')} of customer shorthand — what each customer means by their own words.`,
+        ],
+        keeps: [
+          `${plural(items, 'product')}.`,
+          `${plural(globalAliases, 'piece', 'pieces')} of store-wide shorthand.`,
+          `${plural(orders, 'order')}, kept on file with no customer attached.`,
+        ],
+      };
+    }
+
+    if (scope === 'orders') {
+      return {
+        scope,
+        title: 'Delete every order?',
+        action: 'Delete orders',
+        removes: [`${plural(orders, 'order')} and every line on them.`],
+        keeps: [
+          `${plural(items, 'product')}.`,
+          `${plural(customers, 'customer')}.`,
+          `${plural(aliases.length, 'piece', 'pieces')} of learned shorthand.`,
+          'The walking order.',
+        ],
+      };
+    }
+
+    return {
+      scope,
+      title: 'Erase everything?',
+      action: 'Erase everything',
+      removes: [
+        `${plural(items, 'product')}.`,
+        `${plural(customers, 'customer')}.`,
+        `${plural(orders, 'order')}.`,
+        `${plural(aliases.length, 'piece', 'pieces')} of learned shorthand.`,
+        'The walking order.',
+      ],
+      keeps: ['Your settings: store name, linked sheets and where data is stored.'],
+    };
+  });
+
+  /** The nuclear option asks for the word; the scoped ones do not. */
+  protected readonly clearAllowed = computed(
+    () => this.pendingScope() !== 'everything' || this.typed().trim().toUpperCase() === 'ERASE',
+  );
   protected readonly demoOrders = [
     '— Phoned in —',
     DEMO_ORDER_TEXT.phone,
@@ -751,14 +933,34 @@ export class SettingsPage {
     }
   }
 
-  protected async wipe(): Promise<void> {
-    if (!confirm('Erase the catalog, customers, shorthand and every order? This cannot be undone.')) {
-      return;
-    }
+  protected inputValue(event: Event): string {
+    return (event.target as HTMLInputElement).value;
+  }
+
+  protected askClear(scope: ClearScope): void {
+    this.pendingScope.set(scope);
+    this.backupFirst.set(true);
+    this.typed.set('');
+  }
+
+  protected cancelClear(): void {
+    this.pendingScope.set(null);
+    this.typed.set('');
+  }
+
+  protected async confirmClear(): Promise<void> {
+    const plan = this.clearPlan();
+    if (plan === null || !this.clearAllowed()) return;
+
     this.busy.set(true);
     try {
-      await this.data.clearAll();
-      this.toast.ok('Everything erased.');
+      // Saved before the delete, so a mistake is recoverable through
+      // "Restore from file" rather than by retyping a customer list.
+      if (this.backupFirst()) this.downloadBackup();
+      await this.data.clear(plan.scope);
+      this.toast.ok(CLEARED_MESSAGE[plan.scope]);
+      this.pendingScope.set(null);
+      this.typed.set('');
     } catch (cause) {
       this.toast.error(messageOf(cause));
     } finally {
@@ -766,3 +968,10 @@ export class SettingsPage {
     }
   }
 }
+
+const CLEARED_MESSAGE: Record<ClearScope, string> = {
+  items: 'Catalog deleted. Customers and orders are untouched — upload a sheet to start again.',
+  customers: 'Customers deleted. The catalog and past orders are untouched.',
+  orders: 'Orders deleted. The catalog, customers and shorthand are untouched.',
+  everything: 'Everything erased. Your settings were kept.',
+};

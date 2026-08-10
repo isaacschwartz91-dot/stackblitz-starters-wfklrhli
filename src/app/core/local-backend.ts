@@ -18,7 +18,7 @@ import type {
   Snapshot,
 } from './models';
 import { DEFAULT_SETTINGS } from './models';
-import type { Backend } from './backend';
+import type { Backend, ClearScope } from './backend';
 
 const DB_NAME = 'grocery-picker';
 const DB_VERSION = 1;
@@ -191,10 +191,65 @@ export class LocalBackend implements Backend {
     await this.put('kv', [{ key: 'settings', value: settings }]);
   }
 
-  async clearAll(): Promise<void> {
+  /**
+   * IndexedDB has no foreign keys, so the cascades the Postgres schema
+   * declares are written out here instead. The two backends have to erase the
+   * same things, or the same button would mean different things depending on
+   * where a store keeps its data.
+   */
+  async clear(scope: ClearScope): Promise<void> {
     const db = await this.connection();
-    const transaction = db.transaction([...STORES], 'readwrite');
-    for (const store of STORES) transaction.objectStore(store).clear();
+
+    if (scope === 'everything') {
+      // Settings live in `kv` and are configuration, not data; the caller
+      // writes them back afterwards.
+      const transaction = db.transaction([...STORES], 'readwrite');
+      for (const store of STORES) transaction.objectStore(store).clear();
+      await finished(transaction);
+      return;
+    }
+
+    if (scope === 'orders') {
+      const transaction = db.transaction(['orders', 'orderLines'], 'readwrite');
+      transaction.objectStore('orders').clear();
+      transaction.objectStore('orderLines').clear();
+      await finished(transaction);
+      return;
+    }
+
+    if (scope === 'items') {
+      // aliases.item_id is NOT NULL and cascades, so no alias outlives the
+      // catalog. Order lines are kept as history with their product link cut.
+      const lines = await this.readAll<OrderLine>('orderLines');
+      const orphaned = lines.filter(
+        (line) => line.itemId !== null || line.substituteItemId !== null,
+      );
+      const transaction = db.transaction(['items', 'aliases', 'orderLines'], 'readwrite');
+      transaction.objectStore('items').clear();
+      transaction.objectStore('aliases').clear();
+      const lineStore = transaction.objectStore('orderLines');
+      for (const line of orphaned) {
+        lineStore.put({ ...line, itemId: null, substituteItemId: null });
+      }
+      await finished(transaction);
+      return;
+    }
+
+    // customers: store-wide shorthand survives, per-customer shorthand does
+    // not, and past orders stay on file with nobody attached.
+    const [aliases, orders] = await Promise.all([
+      this.readAll<Alias>('aliases'),
+      this.readAll<Order>('orders'),
+    ]);
+    const perCustomer = aliases.filter((alias) => alias.customerId !== null);
+    const attached = orders.filter((order) => order.customerId !== null);
+
+    const transaction = db.transaction(['customers', 'aliases', 'orders'], 'readwrite');
+    transaction.objectStore('customers').clear();
+    const aliasStore = transaction.objectStore('aliases');
+    for (const alias of perCustomer) aliasStore.delete(alias.id);
+    const orderStore = transaction.objectStore('orders');
+    for (const order of attached) orderStore.put({ ...order, customerId: null });
     await finished(transaction);
   }
 }

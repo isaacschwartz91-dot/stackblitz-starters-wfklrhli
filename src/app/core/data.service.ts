@@ -9,7 +9,7 @@
 
 import { Injectable, computed, signal } from '@angular/core';
 
-import type { Backend } from './backend';
+import type { Backend, ClearScope } from './backend';
 import { LocalBackend } from './local-backend';
 import { SupabaseBackend, readStoredConfig } from './supabase-backend';
 import { runtimeConfig } from './runtime-config';
@@ -358,7 +358,7 @@ export class DataService {
 
   /** Replace everything — used by "restore backup" and the demo data button. */
   async restore(snapshot: Snapshot): Promise<void> {
-    await this.backendRef.clearAll();
+    await this.backendRef.clear('everything');
     await this.backendRef.upsertItems(snapshot.items);
     await this.backendRef.replaceAisles(snapshot.aisles);
     await this.backendRef.upsertCustomers(snapshot.customers);
@@ -373,17 +373,20 @@ export class DataService {
     this.apply(snapshot);
   }
 
-  async clearAll(): Promise<void> {
-    await this.backendRef.clearAll();
-    this.apply({
-      items: [],
-      aisles: [],
-      customers: [],
-      aliases: [],
-      orders: [],
-      orderLines: [],
-      settings: this.settings(),
-    });
+  /**
+   * Delete one kind of data, or all of it.
+   *
+   * What survives is decided by the backend, which follows the foreign keys —
+   * so rather than guess at the outcome here, re-read the store afterwards.
+   * Whatever the screen then shows is what is actually saved.
+   */
+  async clear(scope: ClearScope): Promise<void> {
+    const settings = this.settings();
+    await this.backendRef.clear(scope);
+    // Erasing data is not the same as un-configuring the app: the store name,
+    // the linked sheets and the backend choice are settings, and they stay.
+    if (scope === 'everything') await this.backendRef.saveSettings(settings);
+    await this.load();
   }
 }
 
