@@ -120,6 +120,7 @@ const PAGE_SIZE = 60;
                 <th style="width: 6rem">Aisle</th>
                 <th style="width: 6rem" class="num">Shelf</th>
                 <th style="width: 6rem" class="num">Price</th>
+                <th style="width: 9rem">UPC</th>
                 <th style="width: 5rem"></th>
               </tr>
             </thead>
@@ -142,7 +143,20 @@ const PAGE_SIZE = 60;
                     }
                   </td>
                   <td class="num small tabular">{{ item.shelfSequence ?? '—' }}</td>
-                  <td class="num small tabular">{{ item.price ?? '—' }}</td>
+                  <td class="num small tabular">
+                    @if (item.price !== null) {
+                      {{ money(item.price) }}
+                    } @else {
+                      <span class="dim">—</span>
+                    }
+                  </td>
+                  <td class="small tabular">
+                    @if (item.barcode.trim()) {
+                      {{ item.barcode }}
+                    } @else {
+                      <span class="dim">—</span>
+                    }
+                  </td>
                   <td>
                     <button type="button" class="small" (click)="edit(item)">Edit</button>
                   </td>
@@ -326,6 +340,11 @@ export class CatalogPage {
 
   protected value(event: Event): string {
     return (event.target as HTMLInputElement).value;
+  }
+
+  /** Same currency symbol the order screens use, set in Settings. */
+  protected money(amount: number): string {
+    return `${this.data.settings().currencySymbol}${amount.toFixed(2)}`;
   }
 
   protected numberOrNull(event: Event): number | null {
