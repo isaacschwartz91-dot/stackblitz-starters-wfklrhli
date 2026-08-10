@@ -17,6 +17,7 @@ import { LockService } from '../../core/lock.service';
 import { demoSnapshot, DEMO_ORDER_TEXT } from '../../seed/demo-data';
 import { SelectValue } from '../../ui/select-value';
 import { runtimeConfig } from '../../core/runtime-config';
+import { prepareLogo } from '../../core/logo-image';
 
 @Component({
   selector: 'app-settings',
@@ -63,6 +64,41 @@ import { runtimeConfig } from '../../core/runtime-config';
               />
             </label>
           </div>
+          <div class="field">
+            <span>Logo</span>
+            <div class="logo-row">
+              @if (draft().logoUrl) {
+                <img class="logo-preview" [src]="draft().logoUrl" alt="Store logo" />
+              } @else {
+                <div class="logo-preview empty small dim">No logo</div>
+              }
+              <div class="button-row" style="margin: 0">
+                <label class="button" style="margin: 0">
+                  {{ draft().logoUrl ? 'Replace' : 'Upload' }}
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/svg+xml,image/webp"
+                    hidden
+                    [disabled]="busy()"
+                    (change)="uploadLogo($event)"
+                  />
+                </label>
+                @if (draft().logoUrl) {
+                  <button type="button" class="ghost" (click)="removeLogo()" [disabled]="busy()">
+                    Remove
+                  </button>
+                }
+              </div>
+            </div>
+            <p class="small dim" style="margin: 0.45rem 0 0">
+              Shown in the top bar on every page. PNG, JPEG, SVG or WebP; it is resized for you.
+              Remember to press Save.
+            </p>
+            @if (logoMessage()) {
+              <p class="small" style="margin: 0.35rem 0 0">{{ logoMessage() }}</p>
+            }
+          </div>
+
           @if (!auth.requiresLogin()) {
             <label class="field">
               <span>Your name (shown on orders)</span>
@@ -612,6 +648,59 @@ export class SettingsPage {
 
   protected readonly demoItemCount = demoSnapshot().items.length;
 
+  protected readonly logoMessage = signal('');
+
+  /**
+   * Take an uploaded logo and put it somewhere the app can load it from.
+   *
+   * Supabase Storage when there is a project to hold it, so every device
+   * fetches one small file. Otherwise the image itself goes into settings —
+   * a store running on browser storage has nowhere to upload to, and it
+   * should still get its own logo rather than an error.
+   */
+  protected async uploadLogo(event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (file === undefined) return;
+
+    this.busy.set(true);
+    this.logoMessage.set('');
+    try {
+      const prepared = await prepareLogo(file);
+      const backend = this.data.backend;
+
+      if (backend instanceof SupabaseBackend) {
+        try {
+          const url = await backend.uploadLogo(prepared.blob, extensionFor(prepared.blob.type));
+          this.patch({ logoUrl: url });
+          this.logoMessage.set('Uploaded. Press Save to use it.');
+          return;
+        } catch (cause) {
+          // A missing bucket should not cost someone their logo; keep the
+          // image and say where it ended up instead.
+          this.patch({ logoUrl: prepared.dataUrl });
+          this.logoMessage.set(
+            `${messageOf(cause)} Stored with your settings instead — press Save to use it.`,
+          );
+          return;
+        }
+      }
+
+      this.patch({ logoUrl: prepared.dataUrl });
+      this.logoMessage.set('Ready. Press Save to use it.');
+    } catch (cause) {
+      this.logoMessage.set(messageOf(cause));
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
+  protected removeLogo(): void {
+    this.patch({ logoUrl: '' });
+    this.logoMessage.set('Removed. Press Save to confirm.');
+  }
+
   /**
    * The build the browser is actually running.
    *
@@ -1013,3 +1102,11 @@ const CLEARED_MESSAGE: Record<ClearScope, string> = {
   orders: 'Orders deleted. The catalog, customers and shorthand are untouched.',
   everything: 'Everything erased. Your settings were kept.',
 };
+
+/** File extension for an uploaded logo, from its type. */
+function extensionFor(mime: string): string {
+  if (mime === 'image/svg+xml') return 'svg';
+  if (mime === 'image/jpeg') return 'jpg';
+  if (mime === 'image/webp') return 'webp';
+  return 'png';
+}

@@ -704,6 +704,43 @@ td select {
   background: var(--accent-soft);
 }
 
+/* ------------------------------------------------------------------ logo -- */
+
+/* Height-bound so any shape of logo fits the bar; width follows the image. */
+.brand-logo {
+  height: 28px;
+  width: auto;
+  max-width: 160px;
+  object-fit: contain;
+  display: block;
+}
+
+.logo-row {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+}
+
+.logo-preview {
+  height: 48px;
+  width: auto;
+  max-width: 200px;
+  object-fit: contain;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  padding: 0.3rem;
+}
+
+.logo-preview.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 96px;
+  box-sizing: border-box;
+}
+
 /* --------------------------------------------- delete-data consequences -- */
 
 .consequences {

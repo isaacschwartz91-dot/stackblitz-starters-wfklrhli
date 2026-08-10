@@ -25,7 +25,11 @@ import { LockPage } from './pages/lock/lock.page';
       } @else {
         <header class="topbar no-print">
           <a class="brand" routerLink="/">
-            <span class="mark" aria-hidden="true">▤</span>
+            @if (data.settings().logoUrl; as logo) {
+              <img class="brand-logo" [src]="logo" alt="" />
+            } @else {
+              <span class="mark" aria-hidden="true">▤</span>
+            }
             <span>{{ data.settings().storeName }}</span>
           </a>
 

@@ -156,6 +156,12 @@ export interface AppSettings {
   accentColor: string;
   /** Shown before estimated totals. Purely cosmetic. */
   currencySymbol: string;
+  /**
+   * The store's logo, shown in the top bar. Either a URL to an uploaded file
+   * or, when there is no file store to put one in, the image itself as a
+   * data URL — both are just something an `<img>` can load.
+   */
+  logoUrl: string;
   /** Also break pasted orders on commas, not just newlines. */
   splitOnCommas: boolean;
   /** Score at or above which a fuzzy match is accepted without review. */
@@ -172,6 +178,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   storeName: 'Our Grocery',
   accentColor: '#1f7a4d',
   currencySymbol: '$',
+  logoUrl: '',
   splitOnCommas: false,
   autoAcceptScore: 0.86,
   reviewFloorScore: 0.42,

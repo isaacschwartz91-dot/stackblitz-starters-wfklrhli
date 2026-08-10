@@ -548,6 +548,46 @@ export class SupabaseBackend implements Backend, AuthBackend {
     }
   }
 
+  /**
+   * Put the logo in Supabase Storage and hand back a public URL.
+   *
+   * The bucket has to exist and be public — `supabase/schema.sql` creates it.
+   * If it does not, this says so plainly rather than failing with a bare 404,
+   * because the caller has a working alternative and needs to know to use it.
+   */
+  async uploadLogo(blob: Blob, extension: string): Promise<string> {
+    const bucket = 'branding';
+    // A fresh name each time, so a replaced logo is never served from a cache
+    // that still holds the old one.
+    const objectPath = `logo-${Date.now().toString(36)}.${extension}`;
+
+    const response = await fetch(
+      `${this.config.url}/storage/v1/object/${bucket}/${objectPath}`,
+      {
+        method: 'POST',
+        headers: {
+          apikey: this.config.anonKey,
+          Authorization: `Bearer ${this.session?.accessToken ?? this.config.anonKey}`,
+          'Content-Type': blob.type === '' ? 'application/octet-stream' : blob.type,
+          'x-upsert': 'true',
+        },
+        body: blob,
+      },
+    );
+
+    if (!response.ok) {
+      const detail = await describeError(response);
+      if (response.status === 404 || /bucket/i.test(detail)) {
+        throw new Error(
+          `The "${bucket}" storage bucket does not exist yet. Run supabase/schema.sql, or create a public bucket called "${bucket}".`,
+        );
+      }
+      throw new Error(detail);
+    }
+
+    return `${this.config.url}/storage/v1/object/public/${bucket}/${objectPath}`;
+  }
+
   /** Settings screen "Test connection" button. */
   async testConnection(): Promise<string> {
     const response = await this.request('items?select=id&limit=1', { headers: this.headers() });
