@@ -410,7 +410,18 @@ td.numeric, th.numeric { text-align: right; font-variant-numeric: tabular-nums; 
   .topbar__inner { padding: 8px 12px; min-height: 0; }
   .topbar__nav { order: 3; width: 100%; }
   h1 { font-size: 1.3rem; }
-  .stat__value { font-size: 1.55rem; }
+
+  /* Stat tiles are two numbers and a word — they belong side by side on a
+     phone, not stacked into a screen-long column. */
+  .grid--3, .grid--4 { grid-template-columns: repeat(auto-fit, minmax(92px, 1fr)); gap: 10px; }
+  .stat { padding: 11px 12px; }
+  .stat__label { font-size: 0.68rem; letter-spacing: 0.02em; }
+  .stat__value { font-size: 1.45rem; }
+  .stat__hint { font-size: 0.72rem; }
+
+  /* Queue rows: the parcel details matter more than the zone chip. */
+  .queue-card { padding: 12px 13px; gap: 10px; }
+  .queue-card__zone { font-size: 0.7rem; padding: 3px 7px; }
 }
 
 @media print {
