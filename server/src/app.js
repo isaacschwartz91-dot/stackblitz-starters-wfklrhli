@@ -6,6 +6,7 @@ import morgan from 'morgan';
 import { config } from './config.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import authRoutes from './routes/auth.js';
+import fileRoutes from './routes/files.js';
 import orderRoutes from './routes/orders.js';
 import queueRoutes from './routes/queues.js';
 import scanRoutes from './routes/scans.js';
@@ -33,6 +34,9 @@ export function createApp() {
   app.get('/api/health', (_req, res) => {
     res.json({ status: 'ok', env: config.env, time: new Date().toISOString() });
   });
+
+  // Signed-URL access, checked inside the router — no bearer token involved.
+  app.use('/api/files', fileRoutes);
 
   app.use('/api/auth', authRoutes);
   app.use('/api/orders', orderRoutes);

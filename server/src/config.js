@@ -46,6 +46,11 @@ export const config = {
   // Used to build the customer-facing tracking link printed on labels.
   publicBaseUrl: (process.env.PUBLIC_BASE_URL ?? 'http://localhost:5173').replace(/\/+$/, ''),
 
+  // Where this API is reachable from the outside; used to build absolute links
+  // to proof-of-delivery images in SMS and email.
+  apiBaseUrl: (process.env.API_BASE_URL ??
+    `http://localhost:${process.env.PORT ?? '4000'}`).replace(/\/+$/, ''),
+
   corsOrigin: process.env.CORS_ORIGIN ?? '*',
   logFormat: process.env.LOG_FORMAT ?? (isProduction ? 'combined' : 'dev'),
 

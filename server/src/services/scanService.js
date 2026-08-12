@@ -15,6 +15,7 @@ import { ApiError, badRequest, forbidden, notFound } from '../lib/errors.js';
 import { normaliseBarcodeValue } from '../lib/identifiers.js';
 import { assertTransitionAllowed, SCAN_TRANSITIONS } from '../lib/statusMachine.js';
 import * as orders from '../repositories/orderRepository.js';
+import * as proofs from '../repositories/proofRepository.js';
 import * as scans from '../repositories/scanRepository.js';
 import { decorateOrder } from './orderService.js';
 
@@ -88,6 +89,7 @@ export async function recordScan({
   actor,
   outcome,
   failureReason,
+  recipientName,
   notes,
   deviceLabel,
   latitude,
@@ -190,10 +192,27 @@ export async function recordScan({
         longitude,
       });
 
+      // A drop-off opens the proof-of-delivery record for this attempt. Images
+      // are attached afterwards via POST /api/orders/:id/proof, so a slow upload
+      // never blocks the driver from closing the job.
+      const proof = scanType === 'dropoff'
+        ? await proofs.insert(client, {
+            orderId: order.id,
+            attemptNumber: result.order.attemptCount,
+            outcome: toStatus === 'delivered' ? 'delivered' : 'failed',
+            scanEventId: scanEvent.id,
+            recipientName: recipientName ?? null,
+            failureReason: toStatus === 'failed_attempt' ? failureReason : null,
+            notes: notes ?? null,
+            capturedById: actor.id,
+          })
+        : null;
+
       return {
         order: decorateOrder(result.order),
         statusEvent: result.statusEvent,
         scanEvent,
+        proof,
       };
     });
   } catch (err) {

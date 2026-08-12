@@ -1,8 +1,9 @@
 import { Router } from 'express';
 import multer from 'multer';
+import { z } from 'zod';
 
 import { config } from '../config.js';
-import { badRequest } from '../lib/errors.js';
+import { badRequest, forbidden } from '../lib/errors.js';
 import { buildCsvTemplate } from '../lib/csvImport.js';
 import {
   renderBarcodePng,
@@ -22,6 +23,7 @@ import {
 } from '../schemas/orders.js';
 import * as assignmentService from '../services/assignmentService.js';
 import * as orderService from '../services/orderService.js';
+import * as proofService from '../services/proofService.js';
 import * as scanService from '../services/scanService.js';
 import * as batches from '../repositories/importBatchRepository.js';
 
@@ -150,6 +152,52 @@ router.post('/:id/assign', requireStaff, async (req, res) => {
 router.get('/:id/assignments', requireStaff, async (req, res) => {
   await orderService.getOrder(req.params.id);
   res.json({ assignments: await assignmentService.listAssignmentHistory(req.params.id) });
+});
+
+// ---------------------------------------------------------------------------
+// Proof of delivery
+// ---------------------------------------------------------------------------
+
+const proofUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: config.storage.maxUploadBytes, files: 2 },
+});
+
+const captureProofSchema = z.object({
+  outcome: z.enum(['delivered', 'failed']).optional(),
+  recipientName: z.string().max(200).optional(),
+  failureReason: z.string().max(500).optional(),
+  notes: z.string().max(1000).optional(),
+  // Output of a signature <canvas>; an alternative to uploading a file.
+  signatureDataUrl: z.string().max(4_000_000).optional(),
+}).strict();
+
+router.post(
+  '/:id/proof',
+  proofUpload.fields([{ name: 'photo', maxCount: 1 }, { name: 'signature', maxCount: 1 }]),
+  async (req, res) => {
+    const fields = captureProofSchema.parse(req.body ?? {});
+    const result = await proofService.captureProof({
+      orderId: req.params.id,
+      actor: req.user,
+      outcome: fields.outcome,
+      recipientName: fields.recipientName,
+      failureReason: fields.failureReason,
+      notes: fields.notes,
+      signatureDataUrl: fields.signatureDataUrl,
+      photoBuffer: req.files?.photo?.[0]?.buffer,
+      signatureBuffer: req.files?.signature?.[0]?.buffer,
+    });
+    res.status(201).json(result);
+  },
+);
+
+router.get('/:id/proof', async (req, res) => {
+  const order = await orderService.getOrder(req.params.id);
+  if (req.user.role === 'driver' && order.assignedDriverId !== req.user.id) {
+    throw forbidden('This parcel is not assigned to you');
+  }
+  res.json({ proof: await proofService.listProofForOrder(req.params.id) });
 });
 
 // ---------------------------------------------------------------------------
