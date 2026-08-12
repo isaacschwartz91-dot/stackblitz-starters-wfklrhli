@@ -6,6 +6,7 @@ import { parseOrdersCsv } from '../lib/csvImport.js';
 import { assertTransitionAllowed } from '../lib/statusMachine.js';
 import * as batches from '../repositories/importBatchRepository.js';
 import * as orders from '../repositories/orderRepository.js';
+import { notifyStatusChange } from './notificationService.js';
 
 /** Barcode/token collisions are astronomically unlikely; retry rather than fail. */
 const UNIQUE_RETRY_LIMIT = 5;
@@ -106,7 +107,7 @@ export async function updateOrder(id, patch) {
  * they can attach the scan event.
  */
 export async function changeOrderStatus({ orderId, toStatus, actorId, notes, source = 'manual' }) {
-  return withTransaction(async (client) => {
+  const result = await withTransaction(async (client) => {
     const order = await orders.findByIdForUpdate(client, orderId);
     if (!order) throw notFound('Order not found');
 
@@ -121,7 +122,7 @@ export async function changeOrderStatus({ orderId, toStatus, actorId, notes, sou
       ? null // returning to the dispatcher queue clears the driver
       : undefined;
 
-    const result = await orders.applyStatusChange(client, {
+    const changed = await orders.applyStatusChange(client, {
       order,
       toStatus,
       actorId,
@@ -130,8 +131,12 @@ export async function changeOrderStatus({ orderId, toStatus, actorId, notes, sou
       assignment,
     });
 
-    return { order: decorateOrder(result.order), statusEvent: result.statusEvent };
+    return { order: decorateOrder(changed.order), statusEvent: changed.statusEvent };
   });
+
+  // After the commit: a rolled-back transition must never leave a sent SMS behind.
+  await notifyStatusChange(result);
+  return result;
 }
 
 export async function deleteOrder(id) {

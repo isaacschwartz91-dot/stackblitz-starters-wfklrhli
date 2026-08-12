@@ -17,6 +17,7 @@ import { assertTransitionAllowed, SCAN_TRANSITIONS } from '../lib/statusMachine.
 import * as orders from '../repositories/orderRepository.js';
 import * as proofs from '../repositories/proofRepository.js';
 import * as scans from '../repositories/scanRepository.js';
+import { notifyStatusChange } from './notificationService.js';
 import { decorateOrder } from './orderService.js';
 
 /** Internal signal: the scan is refused, and why. Converted to an ApiError. */
@@ -102,7 +103,7 @@ export async function recordScan({
   }
 
   try {
-    return await withTransaction(async (client) => {
+    const result = await withTransaction(async (client) => {
       const order = await orders.findByBarcodeForUpdate(client, normalised);
 
       if (!order) {
@@ -215,6 +216,10 @@ export async function recordScan({
         proof,
       };
     });
+
+    // After the commit — see notificationService for why.
+    await notifyStatusChange(result);
+    return result;
   } catch (err) {
     if (err instanceof ScanRejection) {
       await logRejectedScan({

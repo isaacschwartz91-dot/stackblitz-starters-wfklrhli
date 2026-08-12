@@ -16,6 +16,7 @@ import { assertTransitionAllowed } from '../lib/statusMachine.js';
 import * as orders from '../repositories/orderRepository.js';
 import * as proofs from '../repositories/proofRepository.js';
 import { assertIsImage, decodeDataUrl, proofKey, storage } from '../storage/index.js';
+import { notifyStatusChange } from './notificationService.js';
 import { decorateOrder } from './orderService.js';
 
 /** A driver may only touch their own parcels; staff may correct any of them. */
@@ -160,6 +161,12 @@ export async function captureProof({
 
     return { order: changed.order, proof, statusEvent: changed.statusEvent };
   });
+
+  // Notify after the commit, and only when this request completed the drop-off;
+  // attaching a photo to an already-closed attempt is not a new event.
+  if (result.statusEvent) {
+    await notifyStatusChange({ order: result.order, statusEvent: result.statusEvent });
+  }
 
   return {
     order: decorateOrder(result.order),

@@ -7,9 +7,11 @@ import { config } from './config.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import authRoutes from './routes/auth.js';
 import fileRoutes from './routes/files.js';
+import notificationRoutes from './routes/notifications.js';
 import orderRoutes from './routes/orders.js';
 import queueRoutes from './routes/queues.js';
 import scanRoutes from './routes/scans.js';
+import trackingRoutes from './routes/tracking.js';
 
 export function createApp() {
   const app = express();
@@ -35,10 +37,13 @@ export function createApp() {
     res.json({ status: 'ok', env: config.env, time: new Date().toISOString() });
   });
 
-  // Signed-URL access, checked inside the router — no bearer token involved.
+  // Public, unauthenticated routes. The tracking token and the signed URL are
+  // the credentials; there is no session involved.
+  app.use('/api/track', trackingRoutes);
   app.use('/api/files', fileRoutes);
 
   app.use('/api/auth', authRoutes);
+  app.use('/api/notifications', notificationRoutes);
   app.use('/api/orders', orderRoutes);
   app.use('/api/queues', queueRoutes);
   app.use('/api/scans', scanRoutes);

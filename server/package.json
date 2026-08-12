@@ -13,7 +13,7 @@
     "migrate": "node src/db/migrate.js up",
     "migrate:status": "node src/db/migrate.js status",
     "seed": "node scripts/seed.js",
-    "test": "node --test test/"
+    "test": "node --test --test-concurrency=1 test/*.test.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1108.0",
