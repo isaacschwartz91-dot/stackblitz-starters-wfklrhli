@@ -246,22 +246,44 @@ export async function summary({ from, to }) {
   };
 }
 
-/** Daily volume, for the dashboard chart. */
+/**
+ * Daily volume, for the dashboard chart.
+ *
+ * Each series is aggregated on its own and then joined onto the day spine.
+ * Joining the three source sets directly to generate_series multiplies them
+ * together — a day with 12 created, 10 delivered and 3 failed reports 360 of
+ * each.
+ */
 export async function dailyVolume({ from, to }) {
   const { rows } = await query(
-    `SELECT d.day::date AS day,
-            count(c.id)::bigint AS created,
-            count(v.id)::bigint AS delivered,
-            count(f.id)::bigint AS failed
-       FROM generate_series(date_trunc('day', $1::timestamptz),
-                            date_trunc('day', $2::timestamptz),
-                            interval '1 day') AS d(day)
-       LEFT JOIN orders c ON date_trunc('day', c.created_at)   = d.day
-       LEFT JOIN orders v ON date_trunc('day', v.delivered_at) = d.day
-       LEFT JOIN order_status_events f
-              ON date_trunc('day', f.created_at) = d.day AND f.to_status = 'failed_attempt'
-      GROUP BY d.day
-      ORDER BY d.day ASC`,
+    `WITH spine AS (
+       SELECT generate_series(date_trunc('day', $1::timestamptz),
+                              date_trunc('day', $2::timestamptz),
+                              interval '1 day')::date AS day
+     ),
+     created AS (
+       SELECT date_trunc('day', created_at)::date AS day, count(*)::bigint AS n
+         FROM orders WHERE created_at BETWEEN $1 AND $2 GROUP BY 1
+     ),
+     delivered AS (
+       SELECT date_trunc('day', delivered_at)::date AS day, count(*)::bigint AS n
+         FROM orders WHERE delivered_at BETWEEN $1 AND $2 GROUP BY 1
+     ),
+     failed AS (
+       SELECT date_trunc('day', created_at)::date AS day, count(*)::bigint AS n
+         FROM order_status_events
+        WHERE to_status = 'failed_attempt' AND created_at BETWEEN $1 AND $2
+        GROUP BY 1
+     )
+     SELECT s.day,
+            COALESCE(c.n, 0) AS created,
+            COALESCE(v.n, 0) AS delivered,
+            COALESCE(f.n, 0) AS failed
+       FROM spine s
+       LEFT JOIN created   c USING (day)
+       LEFT JOIN delivered v USING (day)
+       LEFT JOIN failed    f USING (day)
+      ORDER BY s.day ASC`,
     [from, to],
   );
 

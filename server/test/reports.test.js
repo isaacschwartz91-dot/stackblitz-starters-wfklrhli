@@ -270,6 +270,22 @@ describe('daily volume', () => {
     assert.equal(res.body.days.length, 7);
     assert.ok(res.body.days.every((d) => typeof d.created === 'number'));
   });
+
+  it('counts each series independently rather than multiplying them', async () => {
+    // 3 created, 2 delivered, 1 failed on the same day. Joining the three
+    // sources in one pass would report 6 of each.
+    await runDelivery({ driver: driverA, driverToken: driverA.token, ref: 'M-1' });
+    await runDelivery({ driver: driverA, driverToken: driverA.token, ref: 'M-2' });
+    await runDelivery({ driver: driverA, driverToken: driverA.token, ref: 'M-3', outcome: 'failed' });
+
+    const today = new Date().toISOString().slice(0, 10);
+    const res = await api.get(`/api/reports/daily-volume?from=${today}&to=${today}T23:59:59.999Z`);
+
+    const [day] = res.body.days;
+    assert.equal(day.created, 3);
+    assert.equal(day.delivered, 2);
+    assert.equal(day.failed, 1);
+  });
 });
 
 describe('csv export', () => {
