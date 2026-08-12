@@ -162,8 +162,29 @@ describe('csv import', () => {
 
     const rowNumbers = errors.map((e) => e.rowNumber).sort();
     assert.deepEqual(rowNumbers, [3, 4]);
-    // Row 4 has no phone and no email, so it cannot be notified.
-    assert.ok(errors.some((e) => e.rowNumber === 4 && /phone number or an email/.test(e.message)));
+    // Row 4 has no phone, so the customer could not be texted.
+    assert.ok(errors.some((e) => e.rowNumber === 4 && /phone number is required/.test(e.message)));
+  });
+
+  it('rejects a file with no phone column at all', async () => {
+    assert.throws(
+      () => parseOrdersCsv('order_ref,customer_name,address\nORD-1,Dana,84 Alder Street'),
+      (err) => err.status === 400 && /missing required column\(s\): customerPhone/.test(err.message),
+    );
+  });
+
+  it('reports a row whose phone cell is blank', () => {
+    const csv = [
+      'order_ref,customer_name,phone,address',
+      'ORD-1,Dana Whitfield,+15551234567,84 Alder Street',
+      'ORD-2,Marcus Bell,,19 Kestrel Lane',
+    ].join('\n');
+
+    const { rows, errors } = parseOrdersCsv(csv);
+    assert.equal(rows.length, 1);
+    assert.equal(errors.length, 1);
+    assert.equal(errors[0].field, 'customerPhone');
+    assert.match(errors[0].message, /phone number is required/);
   });
 
   it('catches duplicate references inside one file', () => {

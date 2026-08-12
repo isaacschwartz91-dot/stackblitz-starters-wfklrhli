@@ -67,7 +67,9 @@ cd server && npm run demo      # clears existing orders first
 ## How the workflow maps to the app
 
 1. **Create an order** — Orders → *New order*, or *Import CSV* for a batch.
-   Every order gets a unique barcode value and an unguessable tracking token.
+   Every order needs a phone number (delivery updates go out by SMS); email is
+   optional. Each order gets a unique barcode value and an unguessable tracking
+   token.
 2. **Print the label** — order detail → *Print label*. A 4×6in label with a
    Code 128 barcode, a QR code carrying the same value, and the tracking URL.
 3. **Scan to start tracking** — Scan → camera or type the code → *Mark ready for
@@ -80,8 +82,10 @@ cd server && npm run demo      # clears existing orders first
    canvas, recipient name and notes. A failed attempt records a reason instead.
 7. **Customer updates** — SMS/email at dispatch, out for delivery, delivered and
    failed attempt. The delivered message links to the proof photo.
-8. **Public tracking** — `/track/<token>`, no login. Deliberately shows less than
-   the internal view: no street address, phone, email or delivery notes.
+8. **Public tracking** — `/track/<token>`, no login. Shows less than the internal
+   view by default: town-level destination only, no street address, phone, email
+   or delivery notes. An admin can reveal the street address, phone and notes
+   individually under **Settings → Public tracking page**; email is never shown.
 9. **Reports** — scan-to-delivery time (median and p90, not just the mean),
    deliveries per driver per day, failed and reattempted deliveries, all
    exportable as CSV.
@@ -96,7 +100,19 @@ cd server && npm run demo      # clears existing orders first
 | Pickup and drop-off scans         |   ✓   |            | own parcels    |
 | Capture proof of delivery         |   ✓   |     ✓      | own parcels    |
 | Reports and CSV export            |   ✓   |     ✓      |                |
-| Manage users, delete orders       |   ✓   |            |                |
+| View settings                     |   ✓   |  read-only |                |
+| Change settings, manage users, delete orders | ✓ |      |                |
+
+## Settings
+
+Two kinds, deliberately separated:
+
+- **Runtime settings** live in the database and are changed by an admin at
+  **Settings** in the top nav. Today these are the three public-tracking
+  visibility toggles, all off by default. Dispatchers see the page read-only.
+- **Deployment configuration** lives in `server/.env` and is shown read-only on
+  the same page — driver self-assignment, storage driver, and which notification
+  providers are wired up — so it is visible without shell access.
 
 ## Configuration
 

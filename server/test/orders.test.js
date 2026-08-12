@@ -113,14 +113,40 @@ describe('order creation', () => {
     assert.equal(res.body.error.details.field, 'orderRef');
   });
 
-  it('requires a phone number or an email address', async () => {
+  it('requires a phone number', async () => {
     const res = await api.post('/api/orders', {
-      orderRef: 'ORD-NOCONTACT',
+      orderRef: 'ORD-NOPHONE',
       customerName: 'Dana Whitfield',
       addressLine1: '84 Alder Street',
     });
     assert.equal(res.status, 422);
-    assert.match(JSON.stringify(res.body.error.details), /phone number or an email/);
+    assert.equal(res.body.error.details[0].field, 'customerPhone');
+    assert.match(res.body.error.details[0].message, /phone number is required/);
+  });
+
+  it('rejects an order with only an email address', async () => {
+    // SMS is the guaranteed channel, so email alone is no longer enough.
+    const res = await api.post('/api/orders', orderPayload({
+      customerPhone: undefined,
+      customerEmail: 'dana@example.com',
+    }));
+    assert.equal(res.status, 422);
+    assert.equal(res.body.error.details[0].field, 'customerPhone');
+  });
+
+  it('rejects a blank or malformed phone number', async () => {
+    for (const customerPhone of ['', '   ', '12345', '1234567890123456789', 'not-a-phone']) {
+      const res = await api.post('/api/orders', orderPayload({ customerPhone }));
+      assert.equal(res.status, 422, `"${customerPhone}" should be rejected`);
+      assert.equal(res.body.error.details[0].field, 'customerPhone');
+    }
+  });
+
+  it('accepts an order with a phone and no email', async () => {
+    const res = await api.post('/api/orders', orderPayload({ customerEmail: undefined }));
+    assert.equal(res.status, 201);
+    assert.equal(res.body.order.customerEmail, null);
+    assert.equal(res.body.order.customerPhone, '+15551234567');
   });
 
   it('normalises phone numbers and emails on the way in', async () => {
@@ -226,6 +252,18 @@ describe('order updates', () => {
     assert.equal(res.status, 200);
     assert.equal(res.body.order.customerName, 'Dana W. Whitfield');
     assert.equal(res.body.order.deliveryNotes, 'Ring the side bell');
+  });
+
+  it('refuses to clear the phone number', async () => {
+    const res = await api.patch(`/api/orders/${order.id}`, { customerPhone: '' });
+    assert.equal(res.status, 422);
+    assert.match(JSON.stringify(res.body.error.details), /cannot be removed/);
+  });
+
+  it('allows changing the phone number to another valid one', async () => {
+    const res = await api.patch(`/api/orders/${order.id}`, { customerPhone: '+1 (555) 987-6543' });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.order.customerPhone, '+15559876543');
   });
 
   it('refuses to change the reference or barcode printed on the label', async () => {

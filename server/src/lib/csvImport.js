@@ -59,7 +59,12 @@ export function mapHeaders(headers) {
   return { mapping, unknown };
 }
 
-export const REQUIRED_FIELDS = ['orderRef', 'customerName', 'addressLine1'];
+/**
+ * A file missing any of these is rejected outright, rather than reporting the
+ * same error on every one of its rows. customerPhone is here because every
+ * order must be textable.
+ */
+export const REQUIRED_FIELDS = ['orderRef', 'customerName', 'customerPhone', 'addressLine1'];
 
 export const CSV_TEMPLATE_HEADERS = [
   'order_ref',

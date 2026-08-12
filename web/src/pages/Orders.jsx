@@ -276,11 +276,17 @@ function CreateOrderModal({ onClose, onCreated }) {
         </Field>
 
         <div className="grid grid--2">
-          <Field label="Phone" error={fieldErrors.customerPhone}
-            hint="Needed for SMS updates">
-            <input type="tel" value={form.customerPhone} onChange={set('customerPhone')} placeholder="+15551234567" />
+          <Field label="Phone" required error={fieldErrors.customerPhone}
+            hint="Every order needs one — delivery updates are sent by SMS">
+            <input
+              type="tel"
+              value={form.customerPhone}
+              onChange={set('customerPhone')}
+              placeholder="+15551234567"
+              required
+            />
           </Field>
-          <Field label="Email" error={fieldErrors.customerEmail}>
+          <Field label="Email" error={fieldErrors.customerEmail} hint="Optional">
             <input type="email" value={form.customerEmail} onChange={set('customerEmail')} />
           </Field>
         </div>
@@ -376,8 +382,9 @@ function ImportModal({ onClose, onImported }) {
         <form onSubmit={submit}>
           <p className="page__subtitle" style={{ marginBottom: 14 }}>
             Required columns: <code className="mono">order_ref</code>,{' '}
-            <code className="mono">customer_name</code>, <code className="mono">address_line1</code>,
-            plus a phone or email. Common header spellings are recognised automatically.
+            <code className="mono">customer_name</code>, <code className="mono">phone</code> and{' '}
+            <code className="mono">address_line1</code>. Email is optional. Common header
+            spellings are recognised automatically.
           </p>
 
           <Field label="CSV file" required>

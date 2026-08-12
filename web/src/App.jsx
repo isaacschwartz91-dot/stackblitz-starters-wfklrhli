@@ -9,6 +9,7 @@ import OrderDetailPage from './pages/OrderDetail.jsx';
 import OrdersPage from './pages/Orders.jsx';
 import ReportsPage from './pages/Reports.jsx';
 import ScanPage from './pages/Scan.jsx';
+import SettingsPage from './pages/Settings.jsx';
 import TrackPage from './pages/Track.jsx';
 
 /** Route guard. `roles` omitted means "any signed-in user". */
@@ -40,6 +41,7 @@ function NavBar() {
           {isStaff ? <NavLink to="/orders">Orders</NavLink> : null}
           {isStaff ? <NavLink to="/dispatch">Dispatch</NavLink> : null}
           {isStaff ? <NavLink to="/reports">Reports</NavLink> : null}
+          {isStaff ? <NavLink to="/settings">Settings</NavLink> : null}
         </nav>
 
         <div className="topbar__user">
@@ -96,6 +98,11 @@ export default function App() {
           <Route
             path="/reports"
             element={<Protected roles={['admin', 'dispatcher']}><ReportsPage /></Protected>}
+          />
+          {/* Dispatchers can see settings read-only; only admins can change them. */}
+          <Route
+            path="/settings"
+            element={<Protected roles={['admin', 'dispatcher']}><SettingsPage /></Protected>}
           />
 
           <Route path="*" element={<Navigate to="/" replace />} />

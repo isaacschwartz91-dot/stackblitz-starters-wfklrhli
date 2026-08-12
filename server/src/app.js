@@ -12,6 +12,7 @@ import orderRoutes from './routes/orders.js';
 import queueRoutes from './routes/queues.js';
 import reportRoutes from './routes/reports.js';
 import scanRoutes from './routes/scans.js';
+import settingsRoutes from './routes/settings.js';
 import trackingRoutes from './routes/tracking.js';
 
 export function createApp() {
@@ -49,6 +50,7 @@ export function createApp() {
   app.use('/api/queues', queueRoutes);
   app.use('/api/reports', reportRoutes);
   app.use('/api/scans', scanRoutes);
+  app.use('/api/settings', settingsRoutes);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

@@ -12,6 +12,7 @@ import { notFound } from '../lib/errors.js';
 import * as orders from '../repositories/orderRepository.js';
 import * as proofs from '../repositories/proofRepository.js';
 import { storage } from '../storage/index.js';
+import { getSettings } from './settingsService.js';
 
 /** "Dana Whitfield" -> "Dana W." */
 function maskName(fullName) {
@@ -44,6 +45,7 @@ export async function getPublicTracking(token) {
   const order = await orders.findByTrackingToken(token);
   if (!order) throw notFound('We could not find a delivery for this link');
 
+  const settings = await getSettings();
   const status = PUBLIC_STATUS[order.status] ?? PUBLIC_STATUS.created;
   const history = await orders.listStatusEvents(order.id);
 
@@ -66,13 +68,25 @@ export async function getPublicTracking(token) {
     status: { ...status, raw: order.status },
     timeline: PUBLIC_TIMELINE,
     milestones,
-    // Enough to confirm the delivery is going to the right town, no more.
+    // Town-level by default — enough to confirm the delivery is going to the
+    // right place. An admin can opt into the street address and phone number
+    // (Settings → Public tracking page); those keys are absent, not null, when
+    // the setting is off, so nothing has to be filtered downstream.
     destination: {
       city: order.city,
       region: order.region,
       postalCode: order.postalCode,
       country: order.country,
+      ...(settings['publicTracking.showStreetAddress']
+        ? { addressLine1: order.addressLine1, addressLine2: order.addressLine2 }
+        : {}),
     },
+    ...(settings['publicTracking.showCustomerPhone']
+      ? { customerPhone: order.customerPhone }
+      : {}),
+    ...(settings['publicTracking.showDeliveryNotes'] && order.deliveryNotes
+      ? { deliveryNotes: order.deliveryNotes }
+      : {}),
     driverFirstName: order.status === 'out_for_delivery' ? firstName(order.assignedDriverName) : null,
     attemptCount: order.attemptCount,
     dispatchedAt: order.readyAt,

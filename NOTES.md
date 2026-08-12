@@ -82,11 +82,12 @@ in `order_assignment_events` (migration `002`).
 
 ## Behaviour decisions
 
-**Drivers may self-assign at pickup.** If a driver scans an unassigned parcel
-that is ready to go, they take ownership of it, and the implicit `assigned` hop
-is recorded rather than skipped. Small teams want this; a team with strict
-dispatch control does not. Set `ALLOW_DRIVER_SELF_ASSIGN=false` to require a
-dispatcher. **Worth confirming** — it depends on how your operation runs.
+**Drivers may self-assign at pickup.** Confirmed and kept on. If a driver scans
+an unassigned parcel that is ready to go, they take ownership of it, and the
+implicit `assigned` hop is recorded rather than skipped, so the history never
+jumps from ready straight to out for delivery. `ALLOW_DRIVER_SELF_ASSIGN`
+defaults to true and its live value is shown on the Settings screen. Set it to
+`false` to require a dispatcher.
 
 **Completing a drop-off and uploading the evidence are separable.** A driver
 standing in the rain can close the job instantly with a scan and let a 3MB photo
@@ -96,10 +97,24 @@ land on the same proof row.
 **Deleting an order is only possible before its label is scanned.** After that
 the order is part of the delivery record and cancelling preserves the history.
 
-**Orders require a phone number or an email address.** Enforced by both a check
-constraint and the API. A customer who cannot be notified defeats step 7 of the
-workflow, and discovering it at send time is too late. **Worth confirming** if
-you have order sources with neither.
+**Every order requires a phone number; email is optional.** SMS is the
+guaranteed channel, so an order that cannot be texted is rejected at creation
+rather than discovered at send time. Enforced in four places: the order form,
+the API schema, the CSV importer (a file with no phone column is rejected
+outright instead of failing every row), and a database check constraint.
+
+A phone number can be changed but not cleared — `{"customerPhone": ""}` on an
+update is a validation error, not a way to empty the field.
+
+The constraint was added `NOT VALID` (migration `004`), which enforces the rule
+on every insert and update from here on without failing the migration on rows
+created under the older phone-or-email rule. To find and adopt those rows:
+
+```sql
+SELECT id, order_ref, customer_email FROM orders WHERE customer_phone IS NULL;
+-- backfill, then:
+ALTER TABLE orders VALIDATE CONSTRAINT orders_phone_present;
+```
 
 **Order reference and barcode value are separate fields.** The reference comes
 from your order system; the barcode is generated from an alphabet with no
@@ -116,12 +131,37 @@ genuinely is news.
 ## Security decisions
 
 **The public tracking payload is an allow-list, not a filtered order.** The
-token travels by SMS and gets forwarded and screenshotted, so the page withholds
-street address, phone, email, delivery notes and internal IDs, shows a masked
-customer name (`Dana W.`) and the destination town only, and shares the driver's
-first name only while the parcel is actually out for delivery. A test asserts
-these do not leak. **Worth confirming** — some operations do show the full
-address; that is a one-line change in `trackingService.js`.
+token travels by SMS and gets forwarded and screenshotted, so the page builds
+its response field by field rather than stripping a few off the internal order.
+By default it shows a masked customer name (`Dana W.`), the destination town,
+the milestones, and the driver's first name only while the parcel is actually
+out for delivery.
+
+Three fields are now admin-controlled (**Settings → Public tracking page**),
+each independently, all **off by default**:
+
+| Setting key | Reveals |
+| ----------- | ------- |
+| `publicTracking.showStreetAddress` | `addressLine1` and `addressLine2` |
+| `publicTracking.showCustomerPhone` | the customer's phone number |
+| `publicTracking.showDeliveryNotes` | delivery instructions |
+
+When a toggle is off the field is **absent** from the response, not null, so
+nothing downstream has to filter it. Email address and internal IDs are never
+exposed at any setting — tests assert that with all three toggles on.
+
+Settings live in an `app_settings` key/value table with defaults in code
+(`settingsService.js`), so an empty table is a valid state and adding a toggle
+needs no migration. Values are cached in-process for 15 seconds and the cache is
+cleared on write, so an admin's change is live immediately on the instance that
+made it and within 15 seconds elsewhere. **Worth confirming** if you run many
+instances and need changes to be instant across all of them — that would mean a
+shared cache or a notify channel.
+
+One asymmetry worth knowing about: the customer name stays masked (`Dana W.`)
+even with the street address shown, because no setting covers it. If you turn
+the address on, you may want the full name too — say the word and I will add a
+fourth toggle.
 
 **Tracking tokens are 144 bits of randomness**, never derived from the order
 reference, because the page has no login.
@@ -155,16 +195,21 @@ both return the same message.
 
 ## Verification
 
-- 191 API tests against a real PostgreSQL 16 database, covering the status
+- 219 API tests against a real PostgreSQL 16 database, covering the status
   machine, barcode generation, CSV import, scan ingestion and rejections,
   assignment and auto-batching, proof capture and signed URLs, notification
-  dispatch and deduping, tracking-page leakage, and the reports.
+  dispatch and deduping, tracking-page leakage, the settings API and its access
+  control, the phone requirement across create/update/CSV, and the reports.
 - The proof-of-delivery suite was also run against the local-disk storage driver
   as well as the in-memory one.
 - An 18-step browser test drove the real app end to end: sign-in, order
   creation, label rendering, scanning, dispatch auto-batching, the driver queue,
   pickup, proof capture with a drawn signature, the public tracking page, mobile
   layout, and dark mode. Screenshots were checked by eye.
+- A further 10-step browser test covered the later changes: the phone field
+  refusing to submit empty, the settings screen, toggling each visibility
+  setting and seeing the customer page change, settings surviving a reload,
+  dispatchers getting the page read-only, and drivers being redirected away.
 
 Three bugs were found by that verification and fixed:
 

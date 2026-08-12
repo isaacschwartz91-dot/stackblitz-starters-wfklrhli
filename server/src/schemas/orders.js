@@ -34,17 +34,49 @@ export function normalisePhone(raw) {
   return `${hasPlus ? '+' : ''}${digits}`;
 }
 
-const phoneField = z
+const INVALID_PHONE = 'Phone number must contain between 7 and 15 digits';
+
+/**
+ * Phone is mandatory on every order: SMS is the guaranteed notification
+ * channel, and an order that cannot be texted breaks the customer updates.
+ */
+const requiredPhoneField = z
+  .string({ required_error: 'A phone number is required so the customer can be notified' })
+  .transform((value, ctx) => {
+    if (value.trim() === '') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'A phone number is required so the customer can be notified',
+      });
+      return z.NEVER;
+    }
+    const normalised = normalisePhone(value);
+    if (normalised === null) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: INVALID_PHONE });
+      return z.NEVER;
+    }
+    return normalised;
+  });
+
+/**
+ * The update variant. Absent means "leave it alone", but an explicitly supplied
+ * blank is rejected — there is no way to clear a phone number, only to change it.
+ */
+const updatablePhoneField = z
   .string()
   .optional()
   .transform((value, ctx) => {
-    if (value === undefined || value.trim() === '') return undefined;
-    const normalised = normalisePhone(value);
-    if (normalised === null) {
+    if (value === undefined) return undefined;
+    if (value.trim() === '') {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'Phone number must contain between 7 and 15 digits',
+        message: 'A phone number is required — it cannot be removed',
       });
+      return z.NEVER;
+    }
+    const normalised = normalisePhone(value);
+    if (normalised === null) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: INVALID_PHONE });
       return z.NEVER;
     }
     return normalised;
@@ -67,7 +99,7 @@ const emailField = z
 export const orderFieldsShape = {
   orderRef: text(64).refine((v) => v.length > 0, 'Order reference is required'),
   customerName: text(200).refine((v) => v.length > 0, 'Customer name is required'),
-  customerPhone: phoneField,
+  customerPhone: requiredPhoneField,
   customerEmail: emailField,
   addressLine1: text(200).refine((v) => v.length > 0, 'Address line 1 is required'),
   addressLine2: optionalText(200),
@@ -79,22 +111,7 @@ export const orderFieldsShape = {
   deliveryNotes: optionalText(1000),
 };
 
-// The DB enforces this too (orders_contact_present); checking here turns a 500
-// from a constraint violation into a field-level 422.
-const requireContact = (data, ctx) => {
-  if (!data.customerPhone && !data.customerEmail) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ['customerPhone'],
-      message: 'Provide a phone number or an email address so the customer can be notified',
-    });
-  }
-};
-
-export const createOrderSchema = z
-  .object(orderFieldsShape)
-  .strict()
-  .superRefine(requireContact);
+export const createOrderSchema = z.object(orderFieldsShape).strict();
 
 /**
  * Updates are partial, and deliberately exclude orderRef and barcodeValue:
@@ -103,7 +120,7 @@ export const createOrderSchema = z
 export const updateOrderSchema = z
   .object({
     customerName: orderFieldsShape.customerName.optional(),
-    customerPhone: phoneField,
+    customerPhone: updatablePhoneField,
     customerEmail: emailField,
     addressLine1: orderFieldsShape.addressLine1.optional(),
     addressLine2: optionalText(200),

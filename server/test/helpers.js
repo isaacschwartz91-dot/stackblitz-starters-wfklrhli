@@ -5,14 +5,17 @@ import { closePool, pool } from '../src/db/pool.js';
 import { up } from '../src/db/migrate.js';
 import { signToken } from '../src/middleware/auth.js';
 import * as users from '../src/repositories/userRepository.js';
+import { clearSettingsCache } from '../src/services/settingsService.js';
 
 const TABLES = [
   'notifications',
   'proof_of_delivery',
   'order_status_events',
   'scan_events',
+  'order_assignment_events',
   'orders',
   'order_import_batches',
+  'app_settings',
   'users',
 ];
 
@@ -34,6 +37,9 @@ export async function migrateOnce() {
 export async function resetDatabase() {
   await migrateOnce();
   await pool.query(`TRUNCATE ${TABLES.join(', ')} RESTART IDENTITY CASCADE`);
+  // Settings are cached in-process; truncating the table alone would leave a
+  // previous test's toggles live.
+  clearSettingsCache();
 }
 
 export async function teardown() {

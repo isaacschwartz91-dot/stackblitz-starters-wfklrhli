@@ -18,12 +18,12 @@ const SEED_USERS = [
 const SEED_ORDERS = [
   { orderRef: 'ORD-1001', customerName: 'Dana Whitfield', customerPhone: '+15551234567', customerEmail: 'dana@example.com', addressLine1: '84 Alder Street', addressLine2: 'Apt 3B', city: 'Springfield', region: 'IL', postalCode: '62704', country: 'US', deliveryZone: 'NORTH', deliveryNotes: 'Leave with the doorman' },
   { orderRef: 'ORD-1002', customerName: 'Marcus Bell', customerPhone: '+15551234568', addressLine1: '19 Kestrel Lane', city: 'Springfield', region: 'IL', postalCode: '62703', country: 'US', deliveryZone: 'NORTH' },
-  { orderRef: 'ORD-1003', customerName: 'Yuki Tanaka', customerEmail: 'yuki@example.com', addressLine1: '450 Copper Row', city: 'Springfield', region: 'IL', postalCode: '62711', country: 'US', deliveryZone: 'SOUTH' },
+  { orderRef: 'ORD-1003', customerName: 'Yuki Tanaka', customerPhone: '+15551234569', customerEmail: 'yuki@example.com', addressLine1: '450 Copper Row', city: 'Springfield', region: 'IL', postalCode: '62711', country: 'US', deliveryZone: 'SOUTH' },
   { orderRef: 'ORD-1004', customerName: 'Fatima Nasser', customerPhone: '+15551234570', addressLine1: '7 Juniper Court', city: 'Springfield', region: 'IL', postalCode: '62712', country: 'US', deliveryZone: 'SOUTH', deliveryNotes: 'Ring the side bell' },
   { orderRef: 'ORD-1005', customerName: 'Theo Marchetti', customerPhone: '+15551234571', customerEmail: 'theo@example.com', addressLine1: '231 Foundry Avenue', city: 'Springfield', region: 'IL', postalCode: '62702', country: 'US', deliveryZone: 'EAST' },
   { orderRef: 'ORD-1006', customerName: 'Nia Boateng', customerPhone: '+15551234572', addressLine1: '96 Larkspur Way', city: 'Springfield', region: 'IL', postalCode: '62707', country: 'US', deliveryZone: 'EAST' },
   { orderRef: 'ORD-1007', customerName: 'Oskar Lindgren', customerPhone: '+15551234573', addressLine1: '12 Harbour Terrace', city: 'Springfield', region: 'IL', postalCode: '62705', country: 'US', deliveryZone: 'WEST' },
-  { orderRef: 'ORD-1008', customerName: 'Claudia Moreno', customerEmail: 'claudia@example.com', addressLine1: '308 Vestry Street', city: 'Springfield', region: 'IL', postalCode: '62706', country: 'US', deliveryZone: 'WEST' },
+  { orderRef: 'ORD-1008', customerName: 'Claudia Moreno', customerPhone: '+15551234574', customerEmail: 'claudia@example.com', addressLine1: '308 Vestry Street', city: 'Springfield', region: 'IL', postalCode: '62706', country: 'US', deliveryZone: 'WEST' },
 ];
 
 async function seedUsers() {

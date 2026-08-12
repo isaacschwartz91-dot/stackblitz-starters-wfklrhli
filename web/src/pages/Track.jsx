@@ -78,10 +78,33 @@ export default function TrackPage() {
               <dt>Delivering to</dt>
               <dd>
                 {tracking.customerName}
+                {/* Street address and phone appear only when an admin has
+                    enabled them in Settings → Public tracking page. */}
+                {tracking.destination.addressLine1 ? (
+                  <>
+                    <br />
+                    {tracking.destination.addressLine1}
+                    {tracking.destination.addressLine2 ? (
+                      <><br />{tracking.destination.addressLine2}</>
+                    ) : null}
+                  </>
+                ) : null}
                 <br />
                 {[tracking.destination.city, tracking.destination.region, tracking.destination.postalCode]
                   .filter(Boolean).join(' ')}
               </dd>
+              {tracking.customerPhone ? (
+                <>
+                  <dt>Contact number</dt>
+                  <dd>{tracking.customerPhone}</dd>
+                </>
+              ) : null}
+              {tracking.deliveryNotes ? (
+                <>
+                  <dt>Delivery notes</dt>
+                  <dd>{tracking.deliveryNotes}</dd>
+                </>
+              ) : null}
               {tracking.driverFirstName ? (
                 <>
                   <dt>Your driver</dt>
