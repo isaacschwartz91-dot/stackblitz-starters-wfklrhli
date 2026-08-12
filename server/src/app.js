@@ -10,6 +10,7 @@ import fileRoutes from './routes/files.js';
 import notificationRoutes from './routes/notifications.js';
 import orderRoutes from './routes/orders.js';
 import queueRoutes from './routes/queues.js';
+import reportRoutes from './routes/reports.js';
 import scanRoutes from './routes/scans.js';
 import trackingRoutes from './routes/tracking.js';
 
@@ -46,6 +47,7 @@ export function createApp() {
   app.use('/api/notifications', notificationRoutes);
   app.use('/api/orders', orderRoutes);
   app.use('/api/queues', queueRoutes);
+  app.use('/api/reports', reportRoutes);
   app.use('/api/scans', scanRoutes);
 
   app.use(notFoundHandler);
