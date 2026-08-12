@@ -1,0 +1,33 @@
+{
+  "name": "delivery-tracking-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Delivery tracking API — orders, labels, scan events and status log",
+  "engines": {
+    "node": ">=20.11"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "migrate": "node src/db/migrate.js up",
+    "migrate:status": "node src/db/migrate.js status",
+    "seed": "node scripts/seed.js",
+    "test": "node --test test/"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.2",
+    "bwip-js": "^4.5.1",
+    "cors": "^2.8.5",
+    "csv-parse": "^5.6.0",
+    "dotenv": "^16.4.7",
+    "express": "^5.1.0",
+    "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "morgan": "^1.10.0",
+    "multer": "^2.0.1",
+    "pg": "^8.16.0",
+    "qrcode": "^1.5.4",
+    "zod": "^3.25.0"
+  }
+}
