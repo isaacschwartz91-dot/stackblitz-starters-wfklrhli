@@ -14,12 +14,15 @@ import {
 import { trackingUrl } from '../lib/identifiers.js';
 import { authenticate, requireRole, requireStaff } from '../middleware/auth.js';
 import {
+  assignOrderSchema,
   changeStatusSchema,
   createOrderSchema,
   listOrdersQuerySchema,
   updateOrderSchema,
 } from '../schemas/orders.js';
+import * as assignmentService from '../services/assignmentService.js';
 import * as orderService from '../services/orderService.js';
+import * as scanService from '../services/scanService.js';
 import * as batches from '../repositories/importBatchRepository.js';
 
 const router = Router();
@@ -121,6 +124,32 @@ router.patch('/:id/status', requireStaff, async (req, res) => {
 
 router.delete('/:id', requireRole('admin'), async (req, res) => {
   res.json(await orderService.deleteOrder(req.params.id));
+});
+
+/** Every scan against this order, including rejected ones. */
+router.get('/:id/scans', async (req, res) => {
+  await orderService.getOrder(req.params.id);
+  res.json({ scans: await scanService.listOrderScans(req.params.id) });
+});
+
+// ---------------------------------------------------------------------------
+// Driver assignment
+// ---------------------------------------------------------------------------
+
+router.post('/:id/assign', requireStaff, async (req, res) => {
+  const { driverId, notes } = assignOrderSchema.parse(req.body);
+  const order = await assignmentService.assignOrder({
+    orderId: req.params.id,
+    driverId,
+    actorId: req.user.id,
+    notes,
+  });
+  res.json({ order });
+});
+
+router.get('/:id/assignments', requireStaff, async (req, res) => {
+  await orderService.getOrder(req.params.id);
+  res.json({ assignments: await assignmentService.listAssignmentHistory(req.params.id) });
 });
 
 // ---------------------------------------------------------------------------

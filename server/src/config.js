@@ -51,6 +51,44 @@ export const config = {
 
   csvMaxBytes: Number.parseInt(process.env.CSV_MAX_BYTES ?? '5242880', 10),
   csvMaxRows: Number.parseInt(process.env.CSV_MAX_ROWS ?? '5000', 10),
+
+  // When true, a driver scanning an unassigned parcel at pickup takes ownership
+  // of it. Small teams want this; teams with strict dispatch control don't.
+  allowDriverSelfAssign: process.env.ALLOW_DRIVER_SELF_ASSIGN !== 'false',
+
+  storage: {
+    driver: process.env.STORAGE_DRIVER ?? 'local',
+    localDir: process.env.STORAGE_LOCAL_DIR ?? './var/uploads',
+    urlTtlSeconds: Number.parseInt(process.env.STORAGE_URL_TTL_SECONDS ?? '604800', 10),
+    maxUploadBytes: Number.parseInt(process.env.MAX_UPLOAD_BYTES ?? '10485760', 10),
+    s3: {
+      bucket: process.env.S3_BUCKET,
+      region: process.env.S3_REGION ?? 'us-east-1',
+      accessKeyId: process.env.S3_ACCESS_KEY_ID,
+      secretAccessKey: process.env.S3_SECRET_ACCESS_KEY,
+      endpoint: process.env.S3_ENDPOINT || undefined,
+      forcePathStyle: process.env.S3_FORCE_PATH_STYLE === 'true',
+    },
+  },
+
+  notifications: {
+    driver: process.env.NOTIFICATIONS_DRIVER ?? 'log',
+    notifyOnStatuses: (process.env.NOTIFY_ON_STATUSES ??
+      'ready_for_delivery,out_for_delivery,delivered,failed_attempt')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean),
+    twilio: {
+      accountSid: process.env.TWILIO_ACCOUNT_SID,
+      authToken: process.env.TWILIO_AUTH_TOKEN,
+      fromNumber: process.env.TWILIO_FROM_NUMBER,
+    },
+    sendgrid: {
+      apiKey: process.env.SENDGRID_API_KEY,
+      fromEmail: process.env.SENDGRID_FROM_EMAIL,
+      fromName: process.env.SENDGRID_FROM_NAME ?? 'Deliveries',
+    },
+  },
 };
 
 export function assertProductionReady() {

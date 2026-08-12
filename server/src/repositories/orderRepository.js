@@ -280,11 +280,15 @@ export async function applyStatusChange(client, {
   const params = [order.id, toStatus];
   const push = (value) => `$${params.push(value)}`;
 
+  // clock_timestamp() rather than now(): a request that moves an order through
+  // two statuses (self-assign then pickup) must not stamp both with the
+  // transaction's start time.
+  //
   // ready_at is COALESCEd: a redelivery must not restart the delivery clock,
   // otherwise scan-to-delivery time under-reports every reattempted order.
-  if (toStatus === 'ready_for_delivery') assignments.push('ready_at = COALESCE(ready_at, now())');
-  if (toStatus === 'out_for_delivery') assignments.push('picked_up_at = now()');
-  if (toStatus === 'delivered') assignments.push('delivered_at = now()', 'attempt_count = attempt_count + 1');
+  if (toStatus === 'ready_for_delivery') assignments.push('ready_at = COALESCE(ready_at, clock_timestamp())');
+  if (toStatus === 'out_for_delivery') assignments.push('picked_up_at = clock_timestamp()');
+  if (toStatus === 'delivered') assignments.push('delivered_at = clock_timestamp()', 'attempt_count = attempt_count + 1');
   if (toStatus === 'failed_attempt') assignments.push('attempt_count = attempt_count + 1');
 
   if (assignment !== undefined) {
